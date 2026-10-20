@@ -63,6 +63,11 @@ class ShellTests(unittest.TestCase):
         self.assertEqual(bashrc.count("source " + str(ROOT / "profile.sh")), 1)
         self.assertLess(bashrc.index("source "), bashrc.index("# Keep direnv last"))
         self.assertEqual(profile.count(". " + str(ROOT / "profile.sh")), 1)
+        (self.home / ".bashrc").write_text('eval "$(direnv hook bash)"\n')
+        subprocess.run(["python3", "-c", code], env=self.env, check=True,
+                       text=True, capture_output=True)
+        bashrc = (self.home / ".bashrc").read_text()
+        self.assertLess(bashrc.index("source "), bashrc.index("direnv hook bash"))
 
 
 if __name__ == "__main__":

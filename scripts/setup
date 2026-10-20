@@ -34,7 +34,8 @@ def rewrite_bashrc(remove_existing):
     lines = [line for line in lines if "source " + shlex.quote(str(ROOT / "profile.sh")) not in line
              and line != "# Shared development tooling environment (managed by dev-env setup).\n"]
     insertion = next((index for index, line in enumerate(lines)
-                      if "# Keep direnv last" in line), len(lines))
+                      if "# Keep direnv last" in line
+                      or re.search(r"\bdirenv\s+(?:export|hook)\s+bash\b", line)), len(lines))
     lines.insert(insertion, "# Shared development tooling environment (managed by dev-env setup).\n")
     lines.insert(insertion + 1, SOURCE)
     result = "".join(lines)
