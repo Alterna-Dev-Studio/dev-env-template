@@ -1,0 +1,145 @@
+#!/usr/bin/env python3
+"""Manage SOPS-encrypted environment variables without plaintext files."""
+import argparse
+import getpass
+import json
+import os
+from pathlib import Path
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import tempfile
+
+ROOT = Path(__file__).resolve().parent.parent
+KEY_FILE = Path.home() / ".config/sops/age/keys.txt"
+NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+SCOPE = re.compile(r"^(profile|project/[A-Za-z0-9_-]+)$")
+
+
+def binary(name):
+    found = shutil.which(name) or str(Path.home() / "go/bin" / name)
+    if not Path(found).is_file():
+        raise RuntimeError(f"{name} is required; see README.md")
+    return found
+
+
+def run(args, *, data=None):
+    result = subprocess.run(args, input=data, text=True, capture_output=True, cwd=ROOT)
+    if result.returncode:
+        raise RuntimeError(f"{Path(args[0]).name} failed: {result.stderr.strip()}")
+    return result.stdout
+
+
+def recipient():
+    for line in KEY_FILE.read_text().splitlines():
+        if line.startswith("# public key: "):
+            return line.split(": ", 1)[1]
+    raise RuntimeError(f"No age recipient found in {KEY_FILE}")
+
+
+def path_for(scope):
+    if not SCOPE.fullmatch(scope):
+        raise RuntimeError("Scope must be profile or project/<name>")
+    return ROOT / "secrets" / f"{scope}.enc.json"
+
+
+def encrypt(scope, values):
+    target = path_for(scope)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(values, sort_keys=True, indent=2) + "\n"
+    encrypted = run([binary("sops"), "encrypt", "--age", recipient(),
+                     "--input-type", "json", "--output-type", "json",
+                     "--filename-override", str(target.relative_to(ROOT))], data=payload)
+    fd, temporary = tempfile.mkstemp(prefix=".encrypted-", dir=target.parent)
+    try:
+        with os.fdopen(fd, "w") as output:
+            output.write(encrypted)
+        os.replace(temporary, target)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def decrypt(scope):
+    target = path_for(scope)
+    if not target.exists():
+        return {}
+    payload = run([binary("sops"), "decrypt", "--input-type", "json",
+                   "--output-type", "json", str(target)])
+    data = json.loads(payload)
+    if not isinstance(data, dict) or any(not NAME.fullmatch(k) or not isinstance(v, str)
+                                         for k, v in data.items()):
+        raise RuntimeError("Vault must contain string environment variables")
+    return data
+
+
+def initialize():
+    binary("sops")
+    keygen = binary("age-keygen")
+    config = ROOT / ".sops.yaml"
+    if config.exists() and not KEY_FILE.exists():
+        raise RuntimeError(f"Restore the age identity to {KEY_FILE} before setup")
+    KEY_FILE.parent.mkdir(parents=True, exist_ok=True)
+    KEY_FILE.parent.chmod(0o700)
+    if not KEY_FILE.exists():
+        try:
+            run([keygen, "-o", str(KEY_FILE)])
+        except Exception:
+            KEY_FILE.unlink(missing_ok=True)
+            raise
+    KEY_FILE.chmod(0o600)
+    expected = ("creation_rules:\n"
+                "  - path_regex: secrets/.*\\.enc\\.json$\n"
+                f"    age: {recipient()}\n")
+    if config.exists() and config.read_text() != expected:
+        raise RuntimeError("Existing .sops.yaml differs; refusing to replace it")
+    if not config.exists():
+        config.write_text(expected)
+    if not path_for("profile").exists():
+        encrypt("profile", {})
+    decrypt("profile")
+    print(f"Initialized SOPS for {ROOT}; back up {KEY_FILE} securely.")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("init")
+    for command in ("export", "list", "edit"):
+        sub.add_parser(command).add_argument("scope")
+    setting = sub.add_parser("set")
+    setting.add_argument("scope")
+    setting.add_argument("name")
+    args = parser.parse_args()
+    if args.command == "init":
+        initialize()
+    elif args.command == "set":
+        if not NAME.fullmatch(args.name):
+            raise RuntimeError("Invalid environment variable name")
+        values = decrypt(args.scope)
+        values[args.name] = getpass.getpass(f"{args.name}: ")
+        encrypt(args.scope, values)
+        print(f"Saved {args.name} in {args.scope}.")
+    elif args.command == "edit":
+        target = path_for(args.scope)
+        if not target.exists():
+            encrypt(args.scope, {})
+        subprocess.run([binary("sops"), str(target)], check=True)
+    else:
+        values = decrypt(args.scope)
+        if args.command == "list":
+            for name in sorted(values):
+                print(name)
+        else:
+            for name, value in sorted(values.items()):
+                print(f"export {name}={shlex.quote(value)}")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (RuntimeError, OSError, ValueError, subprocess.CalledProcessError) as error:
+        print(f"envtool: {error}", file=sys.stderr)
+        sys.exit(1)
