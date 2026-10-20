@@ -7,7 +7,7 @@ A small, reusable home for shared development-tool configuration. Secrets live i
 Requirements: Bash, Python 3, `direnv`, `sops`, and `age-keygen`. Install SOPS and age from their official packages or with `go install github.com/getsops/sops/v3/cmd/sops@v3.11.0` and `go install filippo.io/age/cmd/age-keygen@v1.2.1`. The scripts find binaries in `~/go/bin` too.
 
 1. Create a private repository from this GitHub template and clone it.
-2. Run `./scripts/setup`. This creates `~/.config/sops/age/keys.txt`, `.sops.yaml`, and an encrypted empty profile, then adds one guarded source line to `~/.bashrc`.
+2. Run `./scripts/setup --add-keys`. This creates `~/.config/sops/age/keys.txt`, `.sops.yaml`, and an encrypted profile, prompts for shared tool credentials with hidden input, then adds one guarded source line to `~/.bashrc`. Plain `./scripts/setup` skips the prompts.
 3. Back up the age identity securely. Anyone with that file can decrypt the vault; losing it makes the vault unrecoverable.
 4. Add shared credentials with `./scripts/envtool set profile TAIGA_PASSWORD` (input is hidden), or `./scripts/envtool edit profile`.
 5. Start a new Bash shell. `./scripts/envtool list profile` displays names only.

@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Initialize SOPS and install the shared profile in Bash."""
 import argparse
+import getpass
 import os
 from pathlib import Path
 import re
 import runpy
 import shlex
+import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -49,8 +51,27 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--migrate-bashrc", action="store_true",
                         help="encrypt current shared exports, then remove plaintext exports")
+    parser.add_argument("--add-keys", action="store_true",
+                        help="prompt for shared credentials with hidden input")
     args = parser.parse_args()
+    if args.add_keys and not sys.stdin.isatty():
+        raise RuntimeError("--add-keys requires an interactive terminal")
     tool["initialize"]()
+    if args.add_keys:
+        profile = tool["decrypt"]("profile")
+        print("Enter shared tool values; leave blank to keep an existing value or skip.")
+        updated = []
+        for name in SHARED:
+            value = getpass.getpass(f"{name}: ")
+            if value:
+                profile[name] = value
+                updated.append(name)
+        if updated:
+            tool["encrypt"]("profile", profile)
+            check = tool["decrypt"]("profile")
+            if any(check[name] != profile[name] for name in updated):
+                raise RuntimeError("Encrypted profile verification failed")
+            print(f"Saved {len(updated)} shared values.")
     if args.migrate_bashrc:
         existing = BASHRC.read_text()
         present = [name for name in SHARED if re.search(rf"(?m)^\s*export {name}=", existing)]
