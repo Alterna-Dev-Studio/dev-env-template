@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import runpy
 import shlex
+import shutil
 import sys
 import tempfile
 
@@ -23,6 +24,8 @@ LOGINRC = next((Path.home() / name for name in (".bash_profile", ".bash_login")
                 if (Path.home() / name).exists()), Path.home() / ".profile")
 LOGIN_SOURCE = (f'if [ -n "${{BASH_VERSION:-}}" ] && [ -f {shlex.quote(str(ROOT / "profile.sh"))} ]; '
                 f'then . {shlex.quote(str(ROOT / "profile.sh"))}; fi\n')
+COMMENT = "# Shared development tooling environment (managed by dev-env setup).\n"
+DIRENV = ["# Keep direnv last (managed by dev-env setup).\n", 'eval "$(direnv hook bash)"\n']
 
 
 def rewrite_bashrc(remove_existing):
@@ -32,12 +35,17 @@ def rewrite_bashrc(remove_existing):
         pattern = re.compile(r"^\s*export (?:" + "|".join(SHARED) + r")=")
         lines = [line for line in lines if not pattern.match(line)]
     lines = [line for line in lines if "source " + shlex.quote(str(ROOT / "profile.sh")) not in line
-             and line != "# Shared development tooling environment (managed by dev-env setup).\n"]
-    insertion = next((index for index, line in enumerate(lines)
-                      if "# Keep direnv last" in line
-                      or re.search(r"\bdirenv\s+(?:export|hook)\s+bash\b", line)), len(lines))
-    lines.insert(insertion, "# Shared development tooling environment (managed by dev-env setup).\n")
-    lines.insert(insertion + 1, SOURCE)
+             and line != COMMENT]
+    if lines and not lines[-1].endswith("\n"):
+        lines[-1] += "\n"
+    # Project .envrc files need the direnv hook, and it must run after the profile loads.
+    hook = next((index for index, line in enumerate(lines)
+                 if "# Keep direnv last" in line
+                 or re.search(r"\bdirenv\s+(?:export|hook)\s+bash\b", line)), None)
+    if hook is None:
+        lines += [COMMENT, SOURCE] + (DIRENV if shutil.which("direnv") else [])
+    else:
+        lines[hook:hook] = [COMMENT, SOURCE]
     result = "".join(lines)
     if result == old:
         return
