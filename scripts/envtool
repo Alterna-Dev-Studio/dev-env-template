@@ -13,7 +13,11 @@ import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parent.parent
-KEY_FILE = Path.home() / ".config/sops/age/keys.txt"
+# Same lookup order SOPS uses on Linux.
+KEY_FILE = Path(os.environ.get("SOPS_AGE_KEY_FILE")
+                or Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+                / "sops/age/keys.txt")
+CONFIG = ROOT / ".sops.yaml"
 NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 SCOPE = re.compile(r"^(profile|project/[A-Za-z0-9_-]+)$")
 
@@ -32,11 +36,24 @@ def run(args, *, data=None):
     return result.stdout
 
 
-def recipient():
-    for line in KEY_FILE.read_text().splitlines():
-        if line.startswith("# public key: "):
-            return line.split(": ", 1)[1]
-    raise RuntimeError(f"No age recipient found in {KEY_FILE}")
+def require_identity():
+    if not os.environ.get("SOPS_AGE_KEY") and not KEY_FILE.is_file():
+        raise RuntimeError(f"No age identity at {KEY_FILE}; restore it before using the vault")
+
+
+def identities():
+    """Public keys for every identity in the local key file."""
+    require_identity()
+    keys = run([binary("age-keygen"), "-y", str(KEY_FILE)]).split()
+    if not keys:
+        raise RuntimeError(f"No age identity found in {KEY_FILE}")
+    return keys
+
+
+def recipients():
+    """Age recipients named by .sops.yaml creation rules."""
+    found = re.findall(r"(?m)^\s*age:\s*(\S.*?)\s*$", CONFIG.read_text())
+    return [key.strip() for line in found for key in line.split(",") if key.strip()]
 
 
 def path_for(scope):
@@ -49,7 +66,10 @@ def encrypt(scope, values):
     target = path_for(scope)
     target.parent.mkdir(parents=True, exist_ok=True)
     payload = json.dumps(values, sort_keys=True, indent=2) + "\n"
-    encrypted = run([binary("sops"), "encrypt", "--age", recipient(),
+    if not CONFIG.exists():
+        raise RuntimeError("Missing .sops.yaml; run ./scripts/setup first")
+    # Recipients come from .sops.yaml, never from whichever local key is first.
+    encrypted = run([binary("sops"), "encrypt",
                      "--input-type", "json", "--output-type", "json",
                      "--filename-override", str(target.relative_to(ROOT))], data=payload)
     fd, temporary = tempfile.mkstemp(prefix=".encrypted-", dir=target.parent)
@@ -66,6 +86,7 @@ def decrypt(scope):
     target = path_for(scope)
     if not target.exists():
         return {}
+    require_identity()
     payload = run([binary("sops"), "decrypt", "--input-type", "json",
                    "--output-type", "json", str(target)])
     data = json.loads(payload)
@@ -78,25 +99,26 @@ def decrypt(scope):
 def initialize():
     binary("sops")
     keygen = binary("age-keygen")
-    config = ROOT / ".sops.yaml"
-    if config.exists() and not KEY_FILE.exists():
+    if CONFIG.exists() and not KEY_FILE.exists():
         raise RuntimeError(f"Restore the age identity to {KEY_FILE} before setup")
-    KEY_FILE.parent.mkdir(parents=True, exist_ok=True)
-    KEY_FILE.parent.chmod(0o700)
     if not KEY_FILE.exists():
+        KEY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        KEY_FILE.parent.chmod(0o700)
         try:
             run([keygen, "-o", str(KEY_FILE)])
         except Exception:
             KEY_FILE.unlink(missing_ok=True)
             raise
     KEY_FILE.chmod(0o600)
-    expected = ("creation_rules:\n"
-                "  - path_regex: secrets/.*\\.enc\\.json$\n"
-                f"    age: {recipient()}\n")
-    if config.exists() and config.read_text() != expected:
-        raise RuntimeError("Existing .sops.yaml differs; refusing to replace it")
-    if not config.exists():
-        config.write_text(expected)
+    local = identities()
+    if CONFIG.exists():
+        if not set(local) & set(recipients()):
+            raise RuntimeError(f"No identity in {KEY_FILE} matches a .sops.yaml recipient; "
+                               "restore this vault's age identity")
+    else:
+        CONFIG.write_text("creation_rules:\n"
+                          "  - path_regex: secrets/.*\\.enc\\.json$\n"
+                          f"    age: {local[0]}\n")
     if not path_for("profile").exists():
         encrypt("profile", {})
     decrypt("profile")
@@ -126,6 +148,7 @@ def main():
         target = path_for(args.scope)
         if not target.exists():
             encrypt(args.scope, {})
+        require_identity()
         subprocess.run([binary("sops"), str(target)], check=True)
     else:
         values = decrypt(args.scope)
