@@ -1,0 +1,137 @@
+"""Exercise setup and envtool against a throwaway HOME and repository copy.
+
+Run with: python3 -m unittest discover -s tests
+"""
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+import unittest
+
+ROOT = Path(__file__).resolve().parent.parent
+TOOLS = ("sops", "age-keygen", "direnv")
+
+
+@unittest.skipUnless(all(shutil.which(tool) for tool in TOOLS), "requires " + ", ".join(TOOLS))
+class ScriptTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp)
+        self.home = self.tmp / "home"
+        self.home.mkdir()
+        self.repo = self.tmp / "repo"
+        (self.repo / "scripts").mkdir(parents=True)
+        for name in ("envtool", "setup"):
+            shutil.copy2(ROOT / "scripts" / name, self.repo / "scripts" / name)
+        shutil.copy2(ROOT / "profile.sh", self.repo / "profile.sh")
+        self.env = {key: value for key, value in os.environ.items()
+                    if not key.startswith(("SOPS_", "XDG_CONFIG_HOME"))}
+        self.env["HOME"] = str(self.home)
+        self.key = self.home / ".config/sops/age/keys.txt"
+        self.bashrc = self.home / ".bashrc"
+
+    def run_script(self, *args, check=True):
+        result = subprocess.run([str(self.repo / "scripts" / args[0]), *args[1:]], env=self.env,
+                                cwd=self.repo, text=True, capture_output=True)
+        if check and result.returncode:
+            self.fail(f"{args} failed: {result.stderr}")
+        return result
+
+    def store(self, scope, values):
+        code = ("import runpy, sys, json; tool = runpy.run_path(sys.argv[1]); "
+                "data = tool['decrypt'](sys.argv[2]); data.update(json.loads(sys.argv[3])); "
+                "tool['encrypt'](sys.argv[2], data)")
+        subprocess.run(["python3", "-I", "-c", code, str(self.repo / "scripts/envtool"), scope,
+                        __import__("json").dumps(values)], env=self.env, check=True,
+                       capture_output=True)
+
+    def vault_recipients(self, scope="profile"):
+        text = (self.repo / "secrets" / f"{scope}.enc.json").read_text()
+        return set(__import__("re").findall(r"age1[0-9a-z]+", text))
+
+    def public_key(self, path):
+        return subprocess.run(["age-keygen", "-y", str(path)], text=True, check=True,
+                              capture_output=True).stdout.split()
+
+    def test_fresh_setup_is_idempotent_and_adds_direnv_hook_last(self):
+        self.run_script("setup")
+        first = self.bashrc.read_text()
+        self.assertEqual(self.key.stat().st_mode & 0o777, 0o600)
+        lines = first.splitlines()
+        source = next(i for i, line in enumerate(lines) if "profile.sh" in line)
+        hook = next(i for i, line in enumerate(lines) if "direnv hook bash" in line)
+        self.assertLess(source, hook)
+        self.run_script("setup")
+        self.assertEqual(self.bashrc.read_text(), first)
+
+    def test_profile_line_goes_before_existing_direnv_hook(self):
+        self.bashrc.write_text('alias ll="ls -l"\neval "$(direnv hook bash)"\nexport EDITOR=vim')
+        self.run_script("setup")
+        lines = self.bashrc.read_text().splitlines()
+        self.assertEqual(sum("direnv hook" in line for line in lines), 1)
+        self.assertLess(next(i for i, line in enumerate(lines) if "profile.sh" in line),
+                        next(i for i, line in enumerate(lines) if "direnv hook" in line))
+        self.assertIn("export EDITOR=vim", lines)
+
+    def test_missing_trailing_newline_is_not_joined(self):
+        self.bashrc.write_text("export EDITOR=vim")
+        # A PATH without direnv: setup should then leave the hook out.
+        (self.home / "bin").mkdir()
+        for tool in ("python3", "sops", "age-keygen"):
+            os.symlink(shutil.which(tool), self.home / "bin" / tool)
+        self.env["PATH"] = str(self.home / "bin")
+        self.run_script("setup")
+        lines = self.bashrc.read_text().splitlines()
+        self.assertEqual(lines[0], "export EDITOR=vim")
+        self.assertFalse(any("direnv" in line for line in lines))
+
+    def test_encrypt_uses_sops_config_not_first_local_identity(self):
+        self.run_script("setup")
+        vault_key = self.public_key(self.key)
+        other = self.tmp / "other.txt"
+        subprocess.run(["age-keygen", "-o", str(other)], check=True, capture_output=True)
+        self.key.write_text(other.read_text() + self.key.read_text())
+        self.store("profile", {"FOO": "bar"})
+        self.assertEqual(self.vault_recipients(), set(vault_key))
+        self.assertIn("FOO", self.run_script("envtool", "list", "profile").stdout.split())
+        self.run_script("setup")
+
+    def test_setup_rejects_identity_that_does_not_match_vault(self):
+        self.run_script("setup")
+        config = (self.repo / ".sops.yaml").read_text()
+        self.key.unlink()
+        subprocess.run(["age-keygen", "-o", str(self.key)], check=True, capture_output=True)
+        result = self.run_script("setup", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("matches a .sops.yaml recipient", result.stderr)
+        self.assertEqual((self.repo / ".sops.yaml").read_text(), config)
+
+    def test_missing_identity_gives_short_error(self):
+        self.run_script("setup")
+        self.store("profile", {"FOO": "bar"})
+        self.key.unlink()
+        result = self.run_script("envtool", "export", "profile", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.stderr.strip().splitlines(),
+                         [f"envtool: No age identity at {self.key}; restore it before using the vault"])
+
+    def test_xdg_config_home_matches_sops_lookup(self):
+        self.env["XDG_CONFIG_HOME"] = str(self.tmp / "xdg")
+        self.run_script("setup")
+        self.assertTrue((self.tmp / "xdg/sops/age/keys.txt").is_file())
+        self.assertFalse(self.key.exists())
+        self.store("profile", {"FOO": "bar"})
+        self.assertEqual(self.run_script("envtool", "export", "profile").stdout,
+                         "export FOO=bar\n")
+
+    def test_profile_exports_values_in_bash(self):
+        self.run_script("setup")
+        self.store("profile", {"FOO": "it's here"})
+        result = subprocess.run(["bash", "-c", f'source {self.repo}/profile.sh; printf %s "$FOO"'],
+                                env=self.env, text=True, capture_output=True, check=True)
+        self.assertEqual(result.stdout, "it's here")
+
+
+if __name__ == "__main__":
+    unittest.main()
