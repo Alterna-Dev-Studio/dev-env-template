@@ -10,6 +10,8 @@
   `ec4a7a4a8d04dda40744b5b2a0ad0bbf2e98aa58`.
 - Target: dev-env-template PR #2, head
   `1bf5156e8b50e82a5a029913733907615e16494d` at verification time.
+- Pilot review: draft [dev-env-template PR #3](https://github.com/Alterna-Dev-Studio/dev-env-template/pull/3),
+  targeting the existing portable-profile feature branch.
 - Existing consumer guidance: `README.md`. There is no tracked `AGENTS.md`
   or `CLAUDE.md` in this consumer. This pilot does not alter the README,
   shell profile, tests, secrets, or consumer policy.
