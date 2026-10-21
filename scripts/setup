@@ -20,6 +20,10 @@ SHARED = (
 )
 SOURCE = f"[ -f {shlex.quote(str(ROOT / 'profile.sh'))} ] && source {shlex.quote(str(ROOT / 'profile.sh'))}\n"
 BASHRC = Path.home() / ".bashrc"
+LOGINRC = next((Path.home() / name for name in (".bash_profile", ".bash_login")
+                if (Path.home() / name).exists()), Path.home() / ".profile")
+LOGIN_SOURCE = (f'if [ -n "${{BASH_VERSION:-}}" ] && [ -f {shlex.quote(str(ROOT / "profile.sh"))} ]; '
+                f'then . {shlex.quote(str(ROOT / "profile.sh"))}; fi\n')
 COMMENT = "# Shared development tooling environment (managed by dev-env setup).\n"
 DIRENV = ["# Keep direnv last (managed by dev-env setup).\n", 'eval "$(direnv hook bash)"\n']
 
@@ -36,7 +40,8 @@ def rewrite_bashrc(remove_existing):
         lines[-1] += "\n"
     # Project .envrc files need the direnv hook, and it must run after the profile loads.
     hook = next((index for index, line in enumerate(lines)
-                 if "# Keep direnv last" in line or "direnv hook" in line), None)
+                 if "# Keep direnv last" in line
+                 or re.search(r"\bdirenv\s+(?:export|hook)\s+bash\b", line)), None)
     if hook is None:
         lines += [COMMENT, SOURCE] + (DIRENV if shutil.which("direnv") else [])
     else:
@@ -50,6 +55,22 @@ def rewrite_bashrc(remove_existing):
             output.write(result)
         os.chmod(temporary, BASHRC.stat().st_mode & 0o777 if BASHRC.exists() else 0o644)
         os.replace(temporary, BASHRC)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def rewrite_loginrc():
+    old = LOGINRC.read_text() if LOGINRC.exists() else ""
+    if LOGIN_SOURCE in old:
+        return
+    result = old.rstrip("\n") + "\n\n# Development tooling profile (managed by dev-env setup).\n" + LOGIN_SOURCE
+    fd, temporary = tempfile.mkstemp(prefix=f"{LOGINRC.name}-dev-env-", dir=LOGINRC.parent)
+    try:
+        with os.fdopen(fd, "w") as output:
+            output.write(result)
+        os.chmod(temporary, LOGINRC.stat().st_mode & 0o777 if LOGINRC.exists() else 0o644)
+        os.replace(temporary, LOGINRC)
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
@@ -93,10 +114,12 @@ def main():
         if any(check[name] != os.environ[name] for name in present):
             raise RuntimeError("Encrypted profile verification failed; .bashrc was not changed")
         rewrite_bashrc(True)
-        print(f"Migrated {len(present)} shared variables and updated ~/.bashrc.")
+        rewrite_loginrc()
+        print(f"Migrated {len(present)} shared variables and updated ~/.bashrc and {LOGINRC}.")
     else:
         rewrite_bashrc(False)
-        print("Updated ~/.bashrc to source the encrypted profile.")
+        rewrite_loginrc()
+        print(f"Updated ~/.bashrc and {LOGINRC} to source the development profile.")
 
 
 if __name__ == "__main__":
