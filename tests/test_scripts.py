@@ -25,6 +25,7 @@ class ScriptTests(unittest.TestCase):
         for name in ("envtool", "setup"):
             shutil.copy2(ROOT / "scripts" / name, self.repo / "scripts" / name)
         shutil.copy2(ROOT / "profile.sh", self.repo / "profile.sh")
+        shutil.copytree(ROOT / "shell", self.repo / "shell")
         self.env = {key: value for key, value in os.environ.items()
                     if not key.startswith(("SOPS_", "XDG_CONFIG_HOME"))}
         self.env["HOME"] = str(self.home)
@@ -131,6 +132,7 @@ class ScriptTests(unittest.TestCase):
         result = subprocess.run(["bash", "-c", f'source {self.repo}/profile.sh; printf %s "$FOO"'],
                                 env=self.env, text=True, capture_output=True, check=True)
         self.assertEqual(result.stdout, "it's here")
+        self.assertEqual(result.stderr, "")
 
 
 if __name__ == "__main__":
