@@ -58,6 +58,17 @@ The local branch name differs from the PR head branch, but its HEAD matched
 the exact PR head SHA. The skill's normal checkout/pull instruction was
 skipped to preserve this isolated, read-only verification.
 
+The first publish command, `git push -u origin pilot/saasdk-s09-2466`, failed
+with `Permission denied (publickey)` because this checkout's remote uses SSH.
+The same commit was pushed with the existing GitHub CLI credential helper,
+without changing the remote or printing a token:
+
+```bash
+git -c credential.helper='!gh auth git-credential' push \
+  https://github.com/Alterna-Dev-Studio/dev-env-template.git \
+  pilot/saasdk-s09-2466:pilot/saasdk-s09-2466
+```
+
 This demonstrates native skill discovery and a bounded authenticated PR read
 in this consumer. It does not validate the skill's edit, push, comment, or
 Taiga paths, or establish full deployment readiness for epic #2466.
