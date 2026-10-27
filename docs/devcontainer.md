@@ -27,9 +27,12 @@
   has a `postCreateCommand`, append this command to it (for example with `&&`) instead of
   replacing it.
 - `containerEnv` passes `TAIGA_API_URL`, `TAIGA_USERNAME`, `TAIGA_PASSWORD`, `GH_TOKEN`, and
-  `GH_TOKEN_FOR_PACKAGES` from the host shell at launch. Because it reads the host shell,
-  direnv project values never reach the container. Put anything the container needs in the
-  profile scope (see [secrets.md](secrets.md)).
+  `GH_TOKEN_FOR_PACKAGES` from the launching process's environment (`${localEnv:...}`). If
+  VS Code or the devcontainer CLI is started from a direnv-activated project shell, any exported
+  project value with one of those names, such as a project-scoped `TAIGA_PASSWORD` or
+  `GH_TOKEN`, is forwarded into the container. Launch from a shell outside the project, or leave
+  those names out of the project scope. Put anything the container needs in the profile scope
+  (see [secrets.md](secrets.md)).
 
 ## What install-container.sh does
 

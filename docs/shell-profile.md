@@ -10,8 +10,9 @@ Bash startup files source `profile.sh` from your clone. It:
 
 - Always sources `shell/paths.sh`. It sources `shell/aliases.sh` only in interactive shells.
 - Loads the `profile` scope of the vault once per clone. It runs `scripts/envtool export profile`,
-  evaluates the output, and records that this clone has loaded, so a nested shell does not
-  decrypt again. If decryption fails it prints `dev-env: could not load encrypted profile` to
+  evaluates the output, and records that this clone has loaded in a shell variable that is not
+  exported. Sourcing `profile.sh` again in the same shell skips decryption, but a child Bash
+  starts fresh and decrypts again. If decryption fails it prints `dev-env: could not load encrypted profile` to
   stderr and the shell carries on. It never prints secret values or writes a plaintext file.
   The vault itself is described in [secrets.md](secrets.md).
 - Exports `DEV_ENV_HOME` as the clone directory after the profile loads, so a `DEV_ENV_HOME`

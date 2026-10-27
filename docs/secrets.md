@@ -53,11 +53,11 @@ Each scope is one encrypted JSON file of string values keyed by valid environmen
 
 | Command | What it does |
 |---|---|
-| `envtool set <scope> NAME` | Reads the value with hidden input and re-encrypts the scope |
-| `envtool edit <scope>` | Opens the scope in SOPS, which honors `$EDITOR`; creates the scope if missing |
-| `envtool list <scope>` | Prints variable names only |
-| `envtool export <scope>` | Prints `export NAME=value` lines; used by `profile.sh` and `.envrc` |
-| `envtool init` | Creates the identity, `.sops.yaml`, and empty profile; called by setup |
+| `./scripts/envtool set <scope> NAME` | Reads the value with hidden input and re-encrypts the scope |
+| `./scripts/envtool edit <scope>` | Opens the scope in SOPS, which honors `$EDITOR`; creates the scope if missing |
+| `./scripts/envtool list <scope>` | Prints variable names only |
+| `./scripts/envtool export <scope>` | Prints `export NAME=value` lines; used by `profile.sh` and `.envrc` |
+| `./scripts/envtool init` | Creates the identity, `.sops.yaml`, and empty profile; called by setup |
 
 `./scripts/envtool --help` documents every subcommand. Secret values are never printed by setup
 or `list`, and no plaintext file is written.

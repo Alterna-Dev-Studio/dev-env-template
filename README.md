@@ -16,7 +16,9 @@ Setup checks for missing tools, creates the age key and encrypted profile, wires
 | Command | What it does |
 |---|---|
 | `./scripts/setup` | Installs the profile and creates the vault |
-| `./scripts/envtool set\|edit\|list` | Adds, edits, or lists vault values (`list` shows names only) |
+| `./scripts/envtool set <scope> NAME` | Adds a vault value (hidden input) |
+| `./scripts/envtool edit <scope>` | Edits a scope in your editor |
+| `./scripts/envtool list <scope>` | Lists variable names only |
 | `./scripts/setup-taiga-mcp` | Installs the Taiga MCP server |
 | `./scripts/taiga-mcp` | Launches the Taiga MCP server |
 | `./scripts/taiga-story.sh` | Fetches a Taiga story |
