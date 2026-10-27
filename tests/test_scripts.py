@@ -12,6 +12,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parent.parent
 TOOLS = ("sops", "age-keygen", "direnv")
+# Exactly what setup, envtool, and setup-taiga-mcp run; PATH-sensitive tests use only these.
+SETUP_TOOLS = ("python3", "bash", "sh", "dirname", "git", *TOOLS)
 
 
 @unittest.skipUnless(all(shutil.which(tool) for tool in TOOLS), "requires " + ", ".join(TOOLS))
@@ -33,6 +35,20 @@ class ScriptTests(unittest.TestCase):
         self.env["HOME"] = str(self.home)
         self.key = self.home / ".config/sops/age/keys.txt"
         self.bashrc = self.home / ".bashrc"
+
+    def minimal_path(self, *dirs, without=()):
+        """PATH of `dirs` then a bin dir holding only SETUP_TOOLS (minus `without`) from the host."""
+        bin_dir = self.tmp / "minimal-bin"
+        if not bin_dir.exists():
+            bin_dir.mkdir()
+            for name in SETUP_TOOLS:
+                found = shutil.which(name)
+                if found is None:
+                    self.skipTest(f"requires {name} on the host")
+                (bin_dir / name).symlink_to(found)
+        for name in without:
+            (bin_dir / name).unlink(missing_ok=True)
+        return os.pathsep.join([*map(str, dirs), str(bin_dir)])
 
     def run_script(self, *args, check=True, skip_taiga_mcp=True):
         if args[0] == "setup" and skip_taiga_mcp and "--skip-taiga-mcp" not in args:
@@ -256,20 +272,21 @@ class ScriptTests(unittest.TestCase):
                                 env=self.env, text=True, capture_output=True, check=True)
         self.assertEqual(result.stdout, str(self.repo))
 
-    def fake_taiga_mcp(self):
+    def fake_taiga_mcp(self, uv_dir=None):
         checkout = self.tmp / "pytaiga-mcp"
         (checkout / "src").mkdir(parents=True)
         for name in ("pyproject.toml", "uv.lock", "src/server_workflow.py", "src/server_full.py"):
             (checkout / name).touch()
         shims = self.home / "bin"
         shims.mkdir()
-        for name, log in (("uv", "UV_LOG"), ("codex", "CODEX_LOG")):
-            shim = shims / name
+        for name, log, directory in (("uv", "UV_LOG", uv_dir or shims), ("codex", "CODEX_LOG", shims)):
+            directory.mkdir(parents=True, exist_ok=True)
+            shim = directory / name
             shim.write_text(f"#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"${log}\"\n")
             shim.chmod(0o755)
         uv_log, codex_log = self.tmp / "uv.log", self.tmp / "codex.log"
         self.env.update(PYTAIGA_MCP_HOME=str(checkout), UV_LOG=str(uv_log), CODEX_LOG=str(codex_log),
-                        PATH=f"{shims}:{os.environ['PATH']}")
+                        PATH=self.minimal_path(shims))
         return checkout, shims, uv_log, codex_log
 
     def test_setup_taiga_mcp_registers_launcher_for_codex(self):
@@ -286,7 +303,7 @@ class ScriptTests(unittest.TestCase):
         self.assertEqual(codex_log.read_text(), (entry + "\n") * 2)
 
         (shims / "codex").unlink()
-        self.env["PATH"] = f"{shims}:/usr/bin:/bin"
+        self.assertIsNone(shutil.which("codex", path=self.env["PATH"]))
         result = self.run_script("setup-taiga-mcp")
         self.assertIn("codex is not on PATH", result.stdout)
 
@@ -304,9 +321,34 @@ class ScriptTests(unittest.TestCase):
         self.assertEqual((uv_log.read_text(), codex_log.read_text()), before)
 
         (shims / "uv").unlink()
-        self.env["PATH"] = f"{shims}:/usr/bin:/bin"
+        self.assertIsNone(shutil.which("uv", path=self.env["PATH"]))
         result = self.run_script("setup", skip_taiga_mcp=False)
         self.assertIn("uv is not installed", result.stdout)
+
+    def test_setup_installs_taiga_mcp_with_uv_found_only_in_go_bin(self):
+        checkout, _, uv_log, codex_log = self.fake_taiga_mcp(uv_dir=self.home / "go/bin")
+        self.assertIsNone(shutil.which("uv", path=self.env["PATH"]))
+        result = self.run_script("setup", check=False, skip_taiga_mcp=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(uv_log.read_text(), f"sync --frozen --directory {checkout}\n")
+        self.assertIn("Registered taiga-py for Codex", result.stdout)
+        for missing in ("uv is not installed", "uv is required"):
+            self.assertNotIn(missing, result.stdout + result.stderr)
+
+    def test_setup_uses_direnv_found_only_in_go_bin(self):
+        go_bin = self.home / "go/bin"
+        go_bin.mkdir(parents=True)
+        (go_bin / "direnv").symlink_to(shutil.which("direnv"))
+        self.env["PATH"] = self.minimal_path(without=("direnv",))
+        self.assertIsNone(shutil.which("direnv", path=self.env["PATH"]))
+        self.run_script("setup")
+        lines = self.bashrc.read_text().splitlines()
+        self.assertEqual(sum("direnv hook bash" in line for line in lines), 1)
+        self.assertLess(next(i for i, line in enumerate(lines) if "profile.sh" in line),
+                        next(i for i, line in enumerate(lines) if "direnv hook bash" in line))
+        records = list((self.home / ".local/share/direnv/allow").iterdir())
+        self.assertEqual(len(records), 1)
+        self.assertIn(str(self.repo / ".envrc"), records[0].read_text())
 
 
 class HelpAndPreflightTests(unittest.TestCase):
