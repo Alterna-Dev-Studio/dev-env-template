@@ -22,7 +22,7 @@ Parse arguments from `<skill-arguments>`:
   ```
 
 Check out the branch:
-1. `git checkout <branch-name> && git pull`
+1. `git checkout <branch-name>`, then `git pull origin <branch-name>` only if `git ls-remote --exit-code --heads origin <branch-name>` succeeds. Never run a bare `git pull`: a branch just cut from `origin/<base>` tracks the base, so a bare pull would merge base commits into the story branch and the orchestrator could count that merge as the task's commit.
 2. If the branch doesn't exist locally: `git fetch origin <branch-name> && git checkout <branch-name>`
 3. If it doesn't exist at all: `git fetch origin +<base>:refs/remotes/origin/<base> && git checkout -b <branch-name> origin/<base>` — this fallback only fires if the branch-creation step in the calling skill (`$fully-implement-story` or `$implement-story`) was skipped or failed, since normally the branch already exists by the time this skill runs.
 

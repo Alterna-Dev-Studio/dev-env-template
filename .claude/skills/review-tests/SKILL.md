@@ -33,11 +33,11 @@ Also read `docs/testing-conventions.md` for framework-specific conventions (cloc
    - If argument is a branch name: `git diff origin/main...<branch>`
 2. List all changed test files:
    ```bash
-   git diff --name-only origin/main...<branch> -- 'tests/**/*.fs' 'src/Client/tests/**'
+   git diff --name-only origin/main...<branch> -- 'tests/*.py'
    ```
 3. Also list all changed production source files:
    ```bash
-   git diff --name-only origin/main...<branch> -- 'src/**/*.fs' ':!src/Client/tests/**'
+   git diff --name-only origin/main...<branch> -- 'profile.sh' 'shell/*.sh' 'scripts/*' ':!scripts/*.md'
    ```
 4. If no test files changed:
    - If production source files also changed, report an ERROR: "Production code changed on this branch with no corresponding test changes. Tests are required for all feature and bugfix changes (see CLAUDE.md). Review the changes and add appropriate tests before proceeding."

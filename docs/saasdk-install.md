@@ -50,7 +50,7 @@ All SAASDK files are mode 100644. Hashes are SHA-256.
 | `.claude/skills/analyze-story/SKILL.md` | `18b2e8907ef032ee57a9976abdddf9e2760b540095245a1d15318a4207a7ad88` | patched, `ab548cd4c8a588d910d24784af22322bb3575dc504e56eba4d16922bdf0fb7da` |
 | `.claude/skills/implement-story/SKILL.md` | `ed4540992b7b0109910094e48e59f858c333b365bd27aac33be6a3caa83a9966` | patched, `cda337aa393ab70ae6d6642f21fb3e613161924cfe3b54f18b406ce6cc52f03e` |
 | `.claude/skills/pr-converse/SKILL.md` | `15b46f8e062058fcf651944ca615d6280d9bd6be72d49459c16fc8093e8368fb` | byte-identical |
-| `.claude/skills/review-tests/SKILL.md` | `d3a5632a7c596c9dd3e01cde8d45aff47ca148285314f8baaddabc9e10d1e277` | patched, `7378a2509afe743687fc5bae4af84a63bd57a4e590e0cee0a98fbd659b31597e` (by the fully-implement-story install) |
+| `.claude/skills/review-tests/SKILL.md` | `d3a5632a7c596c9dd3e01cde8d45aff47ca148285314f8baaddabc9e10d1e277` | patched, `8dc51de1643cd2d58922f6494e7b2fd3e8f3852f8e4f120437124210eca401a4` (by the fully-implement-story install) |
 | `.claude/skills/codex-review-pr/SKILL.md` | `dce0a4f22219234a58fe92147eb4f9edf4fa0860ada1bffb5ba06b0c98674b1a` | byte-identical |
 | `.claude/skills/shared/taiga-pagination.md` | `cc8a2c179eb43099b2ee5dc67cab100642bbdf4bfbacee5e6346419dc3ff9d10` | byte-identical |
 | `.claude/skills/shared/merge-side-effects.md` | `c13981db2c4d866d3b8bacc44e44af5c9652ec0b1e986695f17e6b99ab55d1ed` | byte-identical |
@@ -64,7 +64,7 @@ All SAASDK files are mode 100644. Hashes are SHA-256.
 | `.agents/skills/implement-story/references/merge-side-effects.md` | `dd654e761b864b70b888d399c2178e1e2dffa5b639e2c335f5251c4294626881` | byte-identical |
 | `.agents/skills/pr-converse/SKILL.md` | `3446f2421da2a06ea2463bd07984a0c1b8ca91bf8d31e17091ec5ba7fd2f9c59` | byte-identical |
 | `.agents/skills/pr-converse/references/commit-attribution.md` | `d00569f163ff6608aca289a9fd8c7cff49a474a37bb0c85dd6d460980e93f780` | byte-identical |
-| `.agents/skills/review-tests/SKILL.md` | `b2cd4a1487f830fb7a5e8ffdb0785ea9bd360c6456a5283cbaea59a838af1057` | patched, `43ae0b10ff7825c92558f11b78807a1ad463cc3c658ce17c3e1a3a6810ea68ef` (by the fully-implement-story install) |
+| `.agents/skills/review-tests/SKILL.md` | `b2cd4a1487f830fb7a5e8ffdb0785ea9bd360c6456a5283cbaea59a838af1057` | patched, `aedf36b7963b05f59405640e0e6169e2b9204d19a5b8dc59dad189e9d2feacdf` (by the fully-implement-story install) |
 | `.agents/skills/review-tests/references/commit-attribution.md` | `d00569f163ff6608aca289a9fd8c7cff49a474a37bb0c85dd6d460980e93f780` | byte-identical |
 | `.agents/skills/codex-review-pr/SKILL.md` | `2c15836dfafbe911ac7273cdf849475f31e3dc188412b4d5be5e06e929d398eb` | byte-identical |
 
@@ -88,8 +88,11 @@ argument as the project ID: the you-thon version took any second argument, so
 The `implement-story` description line is also changed from project 3 to 4.
 The fully-implement-story install (its own section below) later patched both
 `review-tests` bodies: the Claude frontmatter swaps the `dotnet` grants for the
-unittest command, and the one verification sentence in each body reads the
-unittest output instead of `test-results/*.xml`. Unified diffs:
+unittest command, the one verification sentence in each body reads the
+unittest output instead of `test-results/*.xml`, the Step 2 globs enumerate
+`tests/*.py` and this repository's Bash/Python sources instead of F# paths,
+and the Codex body authorizes edits and commits when spawned as the
+test-quality gate. Unified diffs:
 
 ```diff
 --- saasdk/2a04165/.claude/skills/analyze-story/SKILL.md
@@ -268,6 +271,20 @@ unittest output instead of `test-results/*.xml`. Unified diffs:
    - Bash(scripts/taiga-comment.sh *)
    - mcp__taiga-py__get_user_story_by_ref
    - Read
+@@ -33,11 +33,11 @@
+    - If argument is a branch name: `git diff origin/main...<branch>`
+ 2. List all changed test files:
+    ```bash
+-   git diff --name-only origin/main...<branch> -- 'tests/**/*.fs' 'src/Client/tests/**'
++   git diff --name-only origin/main...<branch> -- 'tests/*.py'
+    ```
+ 3. Also list all changed production source files:
+    ```bash
+-   git diff --name-only origin/main...<branch> -- 'src/**/*.fs' ':!src/Client/tests/**'
++   git diff --name-only origin/main...<branch> -- 'profile.sh' 'shell/*.sh' 'scripts/*' ':!scripts/*.md'
+    ```
+ 4. If no test files changed:
+    - If production source files also changed, report an ERROR: "Production code changed on this branch with no corresponding test changes. Tests are required for all feature and bugfix changes (see CLAUDE.md). Review the changes and add appropriate tests before proceeding."
 @@ -115,7 +115,7 @@
 
  ## Step 5: Verify changes
@@ -280,6 +297,29 @@ unittest output instead of `test-results/*.xml`. Unified diffs:
 
 --- saasdk/2a04165/.agents/skills/review-tests/SKILL.md
 +++ .agents/skills/review-tests/SKILL.md
+@@ -40,7 +40,7 @@
+ 4. If edits are authorized, fix confirmed issues according to that consumer's suite and framework conventions. Verify with its documented command and read its actual result format. If a required tool or fixture is unavailable, report the precise verification gap; do not substitute a different test command and claim success.
+ 5. Commit and publish review comments or tracker updates only when those stages are authorized and their repository-specific instructions, targets, and helpers have been verified. Use the consumer's attribution and branch policy. Otherwise return the findings and verification results without writes.
+
+-For the dev-env-template S09 pilot, `docs/testing-strategy.md`, `docs/testing-conventions.md`, `README.md`, and the actual `tests/*.py` suite provide the Bash/Python mapping. Verify that `tests/test_shell.py` and `tests/test_scripts.py` cover changed Bash/Python code, and run `python3 -m unittest discover -s tests -v` when test execution is authorized. Its result is unittest console output; it has no F#, `.fsproj`, .NET, browser, or JUnit XML suite. The S09 read-only pilot authorizes review only, so stop before edits, tests, commits, PR comments, or tracker updates.
++For the dev-env-template S09 pilot, `docs/testing-strategy.md`, `docs/testing-conventions.md`, `README.md`, and the actual `tests/*.py` suite provide the Bash/Python mapping. Verify that `tests/test_shell.py` and `tests/test_scripts.py` cover changed Bash/Python code, and run `python3 -m unittest discover -s tests -v` when test execution is authorized. Its result is unittest console output; it has no F#, `.fsproj`, .NET, browser, or JUnit XML suite. When spawned by `$fully-implement-story` or `$finalize-story-pr` as the test-quality gate, edits, test execution, and commits on the story branch are authorized and expected; a standalone read-only invocation stops before edits, tests, commits, PR comments, or tracker updates.
+
+ ## You-Thon procedure (verified You-Thon checkout only)
+
+@@ -57,11 +57,11 @@
+    - If argument is a branch name: verify its intended comparison base from the consumer's branch policy, then resolve and record the actual base and branch commit SHAs. Confirm against the remote when the branch is published. Use those SHAs for every diff; stop if the branch/base cannot be verified.
+ 2. List all changed test files:
+    ```bash
+-   git diff --name-only <verified-base-sha>...<verified-head-sha> -- 'tests/**/*.fs' 'src/Client/tests/**'
++   git diff --name-only <verified-base-sha>...<verified-head-sha> -- 'tests/*.py'
+    ```
+ 3. Also list all changed production source files:
+    ```bash
+-   git diff --name-only <verified-base-sha>...<verified-head-sha> -- 'src/**/*.fs' ':!src/Client/tests/**'
++   git diff --name-only <verified-base-sha>...<verified-head-sha> -- 'profile.sh' 'shell/*.sh' 'scripts/*' ':!scripts/*.md'
+    ```
+ 4. If no test files changed:
+    - If production source files also changed, report an ERROR: "Production code changed on this branch with no corresponding test changes. Tests are required for all feature and bugfix changes (see AGENTS.md or CLAUDE.md). Review the changes and add appropriate tests before proceeding."
 @@ -139,7 +139,7 @@
 
  ### Step 5: Verify changes
@@ -288,7 +328,6 @@ unittest output instead of `test-results/*.xml`. Unified diffs:
 +Run `timeout 590 python3 -m unittest discover -s tests -v` per `docs/testing-workflow.md` and read the unittest output for pass/fail status (there are no JUnit XML result files here). If any test fails due to the review changes, fix it before proceeding.
 
  ### Step 6: Commit and document
-
 ```
 
 Consumer-owned files added for the skills' required reads: `AGENTS.md` (with
@@ -894,18 +933,18 @@ All files are mode 100644. Hashes are SHA-256.
 
 | Path | Source SHA-256 | Installed |
 | --- | --- | --- |
-| `.claude/skills/fully-implement-story/SKILL.md` | `e5ab69e8a5e5f898a66a5add82d77d7ed19edec96dd287b78367c5e18796d248` | patched, `2b6e86560b9695ab0bc180e010f587c8f7679b0441b4e35d15f2ab1952fdf97c` |
-| `.claude/skills/implement-task/SKILL.md` | `6150675a14a45562452225084f515a289ad76206c4768d19db0162a0f820bcac` | patched, `4353b6e64805b071595597fbae2fc05fb0bd89bbaa5c76f5bd5bb38986d326b8` |
+| `.claude/skills/fully-implement-story/SKILL.md` | `e5ab69e8a5e5f898a66a5add82d77d7ed19edec96dd287b78367c5e18796d248` | patched, `35f915f4266566ecaeda2fd44c4ecda2ce3d4ad6c81c7a8b021c0cb03d25fb8b` |
+| `.claude/skills/implement-task/SKILL.md` | `6150675a14a45562452225084f515a289ad76206c4768d19db0162a0f820bcac` | patched, `2b2e658f6b02d3301131a39bab49a1afc8a96155b4ea0c913459a3162ab71f11` |
 | `.claude/skills/finalize-story-pr/SKILL.md` | `18b8d6338ab6c12d101ddb3d4f070eeec09f4d3197ec063cd6d68926470ff89a` | patched, `d6a8a597e4d32b7c7d52ead2a25754962738611752c62dc17b5383c294a11bf8` |
 | `.claude/skills/rebase-branch/SKILL.md` | `b90ef7a3328abb017bd45cd597a87009e5f11c3871270c7c88a195d3c5c2d152` | patched, `595d1d1f0ac9304c7f5115aa88b5cae03aa100813b1236f29dca0c36230bc912` |
-| `.claude/skills/review-tests/SKILL.md` | `d3a5632a7c596c9dd3e01cde8d45aff47ca148285314f8baaddabc9e10d1e277` | patched, `7378a2509afe743687fc5bae4af84a63bd57a4e590e0cee0a98fbd659b31597e` (diff in the first section) |
+| `.claude/skills/review-tests/SKILL.md` | `d3a5632a7c596c9dd3e01cde8d45aff47ca148285314f8baaddabc9e10d1e277` | patched, `8dc51de1643cd2d58922f6494e7b2fd3e8f3852f8e4f120437124210eca401a4` (diff in the first section) |
 | `.claude/skills/shared/synchronous-worker-contract.md` | `e50222edce13c78bdfe3408532c48f3381d3f646d43aa54bb3ca9b0ed4a4d1f5` | patched, `a1ca35c4e3862a39b7a162263408e009020f3d4d1e5b7165289b3ffa81dfb2a8` |
 | `.claude/agents/senior-software-developer.md` | `9fa7a74e9a586f283e15591e5c6b1e25f0903cc1769fd334b9e5880874f0cfb9` | patched, `d3aca028cc1d3bd77dab1be419e28934fab9b91bedd95f04be161c9dd3d1964c` |
 | `.claude/agents/test-quality-reviewer.md` | `41da0384cee9a632a3104f1e7d860cabba6dcaddc36bb12de0d9ff3b8456b88d` | patched, `9e358875bdd5c2ccbc0cff7d29f5da5ba4deaccb6687a3a4f4636747e47d73b2` |
 | `.claude/agents/remediation-developer.md` | `9346bacdb88acf0c4a01a765e86e3fee4ed04127597817ca1dbeb22323650189` | patched, `95a05dc774a631255719e96d4b9668e5ed51a2f2d98ce1dc003cf586e348c492` |
-| `.agents/skills/fully-implement-story/SKILL.md` | `8222b225ac67c8c4545f956a1d161573c08dfd97dcf3e77b0042749a718d544c` | patched, `454482901c6f760223379be7bf823d729275b2a7306482446288f0c5f6e5461c` |
+| `.agents/skills/fully-implement-story/SKILL.md` | `8222b225ac67c8c4545f956a1d161573c08dfd97dcf3e77b0042749a718d544c` | patched, `a5d8e5ab027bc6f1d43223bd297c4983fcf2aac027102518e219086e5d62bb97` |
 | `.agents/skills/fully-implement-story/references/merge-side-effects.md` | `dd654e761b864b70b888d399c2178e1e2dffa5b639e2c335f5251c4294626881` | byte-identical |
-| `.agents/skills/implement-task/SKILL.md` | `1f61ae7c94d2643bd5c7c2acfbed3cc351f3ee2e43cf969542b19bf04c58d3ba` | patched, `e556416002c110761ba16cc929a8a8fd1cf5cef98a4579a795eaace78e0342e2` |
+| `.agents/skills/implement-task/SKILL.md` | `1f61ae7c94d2643bd5c7c2acfbed3cc351f3ee2e43cf969542b19bf04c58d3ba` | patched, `047de798ceb1f1313bc24cb8e10a6a1e6863c3b57081119181bfe1e565a007ab` |
 | `.agents/skills/implement-task/references/commit-attribution.md` | `b357f72263d3cd2409fa5d5c6acb1996ed4f9d4543e84db9a01351f28b56b82c` | byte-identical |
 | `.agents/skills/implement-task/references/merge-side-effects.md` | `dd654e761b864b70b888d399c2178e1e2dffa5b639e2c335f5251c4294626881` | byte-identical |
 | `.agents/skills/implement-task/references/test-failure-triage.md` | `ead945bd22c8f19a5846fcb58f60f6a7cb81ee51d8f98549f5e33bea05026fe2` | patched, `80d9e509228e19a1f81ba4b87a66177f60c70253dfa1b2845d522569b18c1a16` |
@@ -917,7 +956,7 @@ All files are mode 100644. Hashes are SHA-256.
 | `.agents/skills/rebase-branch/SKILL.md` | `f5a9fa42aeb21a0a54c3860fa6457c170ebd67004e23bd18236251841f1660cf` | patched, `6ca8dc68459eb6104075e08df86f43c58eef6c507a2ac3f6f44650fd67e46c1c` |
 | `.agents/skills/rebase-branch/references/bug-filing.md` | `497aa2f56141a0df6457eee65fbfba2f4604ff0bc41c804cd8acdc47eccf33bb` | patched, `af8478c3111e9bfbd33df2a48b61d2a2114d4f366e66a392904d6f7384c7127b` (same bytes as the `pr-comments-resolve` copy) |
 | `.agents/skills/rebase-branch/references/test-failure-triage.md` | `8c66fec2e5b1a2aca37129d96affb0540a697620fbbea40e0dde27f6bb2a4ea7` | patched, `7e26298a5c3617ac81aedd669c2a9f430344626f243f6d0e256ef9c2a9155daf` (same bytes as the `pr-comments-resolve` copy) |
-| `.agents/skills/review-tests/SKILL.md` | `b2cd4a1487f830fb7a5e8ffdb0785ea9bd360c6456a5283cbaea59a838af1057` | patched, `43ae0b10ff7825c92558f11b78807a1ad463cc3c658ce17c3e1a3a6810ea68ef` (diff in the first section) |
+| `.agents/skills/review-tests/SKILL.md` | `b2cd4a1487f830fb7a5e8ffdb0785ea9bd360c6456a5283cbaea59a838af1057` | patched, `aedf36b7963b05f59405640e0e6169e2b9204d19a5b8dc59dad189e9d2feacdf` (diff in the first section) |
 | `.agents/skills/shared/synchronous-worker-contract.md` | `dd040458037facf0b0b461aada42b98147d86cda0dd212027f50eeeb134dbe94` | patched, `d0410efbe2dffaa6efbe151f9dcd200eb7db0705d3d0817a6b44a7b0185c691b` |
 | `.codex/agents/senior-software-developer.toml` | `65c7e42b42a7a6f7fb94c89c6c3aa4b873bc08eb032728a0c1929cefc11789a3` | patched, `30e328417c3892ec7e0afd6c34fc68a56e9bea43c4129b929119f0199f6403bb` |
 | `.codex/agents/test-quality-reviewer.toml` | `c6edd70bb52d16e67a3f14851ca01a2e4e791e52be3e86991df28c5a197ac9f0` | patched, `98ccc02bcf74b6568e37c28bc48f80e6e879dd26af3ac260338331fa26d4b994` |
@@ -953,7 +992,7 @@ so that `tests/test_skills.py` can forbid it in the installed closure. Unified d
 ```diff
 --- saasdk/2a04165/.claude/skills/fully-implement-story/SKILL.md
 +++ .claude/skills/fully-implement-story/SKILL.md
-@@ -1,18 +1,21 @@
+@@ -1,18 +1,22 @@
  ---
  name: fully-implement-story
 -description: Autonomously implement a story end-to-end with agents — implementation, PR monitoring, testing, bug fixing
@@ -969,6 +1008,7 @@ so that `tests/test_skills.py` can forbid it in the installed closure. Unified d
    - Bash(sleep *)
 -  - Bash(python3 scripts/remediate_pr.py *)
 -  - Bash(dotnet run -- Reset*)
++  - Bash(pgrep *)
 +  - Bash(date *)
 +  - Bash(cat /tmp/*)
 +  - Bash(rm -f /tmp/*)
@@ -978,7 +1018,7 @@ so that `tests/test_skills.py` can forbid it in the installed closure. Unified d
    - Read
    - Grep
    - Glob
-@@ -20,15 +23,15 @@
+@@ -20,15 +24,15 @@
 
  # Fully Implement Story $ARGUMENTS
 
@@ -997,7 +1037,7 @@ so that `tests/test_skills.py` can forbid it in the installed closure. Unified d
  1. Check the task lock `/tmp/implement-task-<storyRef>-<taskRef>.lock` (written by implement-task). It holds a heartbeat epoch second that the subagent refreshes as it works — never a pid, because `$PPID` inside a Bash tool call is the long-lived `claude` CLI process shared by every subagent, so its liveness would always succeed and the lock of a crashed agent would pin the orchestrator forever. The subagent is still alive only if the heartbeat is under 15 minutes old:
     ```bash
     lock=/tmp/implement-task-<storyRef>-<taskRef>.lock
-@@ -36,11 +39,10 @@
+@@ -36,11 +40,10 @@
     ```
     While it reports `alive`, poll every 30 s in a single Bash call (`timeout: 600000`) until the lock is gone or the heartbeat goes stale. If it is still `alive` when the poll window ends, escalate (`escalationReason = "task #<ref> subagent still running after early return"`) — do not respawn.
  2. Only when the lock is absent or its heartbeat is stale: `rm -f` any stale lock, then spawn the fresh foreground agent.
@@ -1011,7 +1051,7 @@ so that `tests/test_skills.py` can forbid it in the installed closure. Unified d
  - Agent blocked by a permission denial or tool error: write `phase = "escalated"` with the specific reason and STOP.
  - Uncertainty about proceeding: write `phase = "escalated"` with `escalationReason = "uncertain: <what>"` and STOP. Do not ask.
 
-@@ -48,9 +50,9 @@
+@@ -48,9 +51,9 @@
  - `"complete"` — all steps succeeded, PR ready for review
  - `"escalated"` — any reason, with populated `escalationReason`
 
@@ -1023,13 +1063,14 @@ so that `tests/test_skills.py` can forbid it in the installed closure. Unified d
 
  ## Step 0: Parse arguments
 
-@@ -72,12 +74,12 @@
+@@ -72,12 +75,12 @@
 
  **Resume check — do this before anything else in Step 1.** You are resuming when `--resume` is present, or when `/tmp/fully-implement-<ref>.json` already exists with a non-terminal `phase` (an interactive re-invoke). The story is already In progress with work on disk: do not start over, and do not ask — resume.
 
 -1. Recover the state. If `/tmp/fully-implement-<ref>.json` exists, read it and do not overwrite it. If it does not (the container was replaced; the clone survived), rebuild it from what is on disk and in Taiga:
+-   - `featureBranch`: `git branch -a --format='%(refname:short)' | grep -E '^(origin/)?feature/.+-<ref>$'` — the anchored match matters for the reasons given in 1c.1; drop a leading `origin/` from the match. The branch may exist only locally.
 +1. Recover the state. If `/tmp/fully-implement-<ref>.json` exists, read it and do not overwrite it. If it does not (the checkout survived but the state file did not), rebuild it from what is on disk and in Taiga:
-    - `featureBranch`: `git branch -a --format='%(refname:short)' | grep -E '^(origin/)?feature/.+-<ref>$'` — the anchored match matters for the reasons given in 1c.1; drop a leading `origin/` from the match. The branch may exist only locally.
++   - `featureBranch`: `git branch -a --format='%(refname:short)' | grep -E '^(origin/)?feature/.+-<ref>$' | sed 's#^origin/##' | sort -u` — the anchored match matters for the reasons given in 1c.1; the `sed`/`sort -u` collapse a local branch and its `origin/` counterpart into one name, so expect exactly one line (more than one means two stories' branches share the ref: escalate). The branch may exist only locally.
     - Look up any existing PR once: `gh pr list --head <branch> --state all --json number,baseRefName --jq '.[0]'` (null if none).
 -   - `baseBranch`: the existing PR's `baseRefName` from the lookup above, if a PR was found — the PR already records the base it was opened against, so this survives a relaunch that passes only `<ref>` (e.g. `/implement-epic` retrying after replacing the container). Otherwise, `<base-branch>` from Step 0 (the argument if given, otherwise the `defaultBranchRef` lookup).
 +   - `baseBranch`: the existing PR's `baseRefName` from the lookup above, if a PR was found — the PR already records the base it was opened against, so this survives a relaunch that passes only `<ref>`. Otherwise, `<base-branch>` from Step 0 (the argument if given, otherwise the `defaultBranchRef` lookup).
@@ -1039,7 +1080,7 @@ so that `tests/test_skills.py` can forbid it in the installed closure. Unified d
     - `phase`: `"monitoring"` if a PR exists and is open, else `"implementing"`.
     - Write the block from 1d with those values.
  2. Skip 1a's status validation (the story is no longer "Ready") — just fetch the story and its tasks for context.
-@@ -88,21 +90,21 @@
+@@ -88,21 +91,21 @@
 
  ### 1a. Fetch and validate the story
 
@@ -1058,14 +1099,16 @@ so that `tests/test_skills.py` can forbid it in the installed closure. Unified d
 
  ### 1c. Set up branch
 
- 1. Check for existing branch: `git branch -a --format='%(refname:short)' | grep -E '^(origin/)?feature/.+-<ref>$'` — anchoring on the `feature/<slug>-<ref>` convention this skill creates is what keeps the match to this story's own branch. An unanchored substring match on the bare ref also matches the base branch the clone is sitting on when that name ends in this story's ref (a multi-parent story is cloned onto `epic/<epic-ref>-integration-<ref>`), and it matches longer refs too (`274` matches `feature/x-2745`). A base branch is never this story's own branch.
- 2. If branch exists: `git checkout <branch-name> && git pull` — `<branch-name>` is the match with any leading `origin/` dropped, so that `git checkout` creates the tracking branch.
+-1. Check for existing branch: `git branch -a --format='%(refname:short)' | grep -E '^(origin/)?feature/.+-<ref>$'` — anchoring on the `feature/<slug>-<ref>` convention this skill creates is what keeps the match to this story's own branch. An unanchored substring match on the bare ref also matches the base branch the clone is sitting on when that name ends in this story's ref (a multi-parent story is cloned onto `epic/<epic-ref>-integration-<ref>`), and it matches longer refs too (`274` matches `feature/x-2745`). A base branch is never this story's own branch.
+-2. If branch exists: `git checkout <branch-name> && git pull` — `<branch-name>` is the match with any leading `origin/` dropped, so that `git checkout` creates the tracking branch.
 -3. If no branch: `git fetch origin +<base-branch>:refs/remotes/origin/<base-branch> && git checkout -b feature/<slug>-<ref> origin/<base-branch>` — fetching the named ref explicitly (not a bare `git fetch origin`, and not `git fetch origin <base-branch>` alone) matters in the shallow single-branch clones `scripts/devcontainer/launch.sh` creates: the clone's `remote.origin.fetch` refspec is restricted to the branch it was cloned from, so a bare fetch never retrieves a stacked predecessor's branch, and fetching the ref without a destination only populates `FETCH_HEAD` — the `:refs/remotes/origin/<base-branch>` destination is what creates the `origin/<base-branch>` ref this command consumes.
++1. Check for existing branch: `git branch -a --format='%(refname:short)' | grep -E '^(origin/)?feature/.+-<ref>$' | sed 's#^origin/##' | sort -u` — expect at most one line (the `sed`/`sort -u` collapse a local branch and its `origin/` counterpart); anchoring on the `feature/<slug>-<ref>` convention this skill creates is what keeps the match to this story's own branch. An unanchored substring match on the bare ref also matches the base branch the clone is sitting on when that name ends in this story's ref (a multi-parent story is cloned onto `epic/<epic-ref>-integration-<ref>`), and it matches longer refs too (`274` matches `feature/x-2745`). A base branch is never this story's own branch.
++2. If branch exists: `git checkout <branch-name>` (the deduplicated name, so that `git checkout` creates the tracking branch when only `origin/` has it), then `git pull origin <branch-name>` only if `git ls-remote --exit-code --heads origin <branch-name>` succeeds. Never a bare `git pull`: a local-only branch cut from `origin/<base-branch>` tracks the base, and a bare pull would merge base commits into the story branch.
 +3. If no branch: `git fetch origin +<base-branch>:refs/remotes/origin/<base-branch> && git checkout -b feature/<slug>-<ref> origin/<base-branch>` — fetch the named ref explicitly (not a bare `git fetch origin`, and not `git fetch origin <base-branch>` alone): a bare fetch does not retrieve a stacked predecessor's branch when the clone's `remote.origin.fetch` refspec is restricted, and fetching the ref without a destination only populates `FETCH_HEAD` — the `:refs/remotes/origin/<base-branch>` destination is what creates the `origin/<base-branch>` ref this command consumes.
 
  ### 1d. Initialize state file
 
-@@ -120,18 +122,17 @@
+@@ -120,18 +123,17 @@
    "featureBranch": "<branch-name>",
    "baseBranch": "<base-branch>",
    "tasksCompleted": 0,
@@ -1086,7 +1129,7 @@ so that `tests/test_skills.py` can forbid it in the installed closure. Unified d
 
  ### 1e. Set story to "In progress"
 
-@@ -144,18 +145,18 @@
+@@ -144,18 +146,18 @@
  1. **Record the branch tip, then spawn a fresh `senior-software-developer` agent:**
     - Before spawning: run `git rev-parse <branch-name>` (the current directory is the checkout, as for every other git command in this skill) and store the result in the state file as `preSpawnTip`. Shell variables do not survive across tool calls, so the check below substitutes the literal SHA from the state file.
     - `subagent_type: "senior-software-developer"`
@@ -1099,7 +1142,7 @@ so that `tests/test_skills.py` can forbid it in the installed closure. Unified d
 +2. **When agent returns**, verify the branch, not the report. Report formatting is known-flaky, so the completion signal is `git rev-list <preSpawnTip>..<branch-name>` (substitute `<preSpawnTip>` from the state file): non-empty output means the task's commit landed, whatever SHA the report cites; empty output means the agent returned before finishing. Docs/config-only tasks still commit, so a landed commit is always expected.
     - If output contains "BLOCKED:" → the agent hit a permission denial or other unrecoverable issue. Escalate: set `phase = "escalated"`, `escalationReason = "agent blocked: <details>"`, tag story with `escalation-needed`, assign to Jon, and **STOP**.
 -   - If output contains one or more `GATED: <task-ref> <reason>` lines → each named task is left open by design and counts as finished, not failed, so never retry it. Resolve each ref to its id with `scripts/taiga-story.sh <ref> 3 --with-tasks`; for every id not already in `verifiedTaskIds`, append it to `verifiedTaskIds`, increment `tasksCompleted`, and write the state file. A gated task lands no commit, so when the report gates a task and claims nothing else, skip the `rev-list` checks below and continue the loop. Carry the `GATED:` lines into the final report. See [`../shared/merge-side-effects.md`](../shared/merge-side-effects.md).
-+   - If output contains one or more `GATED: <task-ref> <reason>` lines → each named task is left open by design and counts as finished, not failed, so never retry it. Resolve each ref to its id with `scripts/taiga-story.sh <ref> 4 --with-tasks`; for every id not already in `verifiedTaskIds`, append it to `verifiedTaskIds`, increment `tasksCompleted`, and write the state file. A gated task lands no commit, so when the report gates a task and claims nothing else, skip the `rev-list` checks below and continue the loop. Carry the `GATED:` lines into the final report. See [`../shared/merge-side-effects.md`](../shared/merge-side-effects.md).
++   - If output contains one or more `GATED: <task-ref> <reason>` lines → each named task is left open by design and counts as finished, not failed, so never retry it. Resolve each gated task ref to its task id by fetching the story's task list with `scripts/taiga-story.sh <ref> 4 --with-tasks` (the story ref, not the task ref: the helper resolves stories, issues, and epics only) and matching the task ref against `tasks[].ref`; for every id not already in `verifiedTaskIds`, append it to `verifiedTaskIds`, increment `tasksCompleted`, and write the state file. A gated task lands no commit, so when the report gates a task and claims nothing else, skip the `rev-list` checks below and continue the loop. Carry the `GATED:` lines into the final report. See [`../shared/merge-side-effects.md`](../shared/merge-side-effects.md).
     - If output contains "All tasks complete" **and** the state file has `tasksCompleted == tasksTotal` → break loop, go to Step 2a. If `tasksCompleted < tasksTotal`, the sentinel is not trusted — a worker closed a task in Taiga without landing its commit — so treat it exactly like an empty `rev-list` and enter the recovery path below.
 -   - `rev-list` non-empty → the work landed. Re-fetch tasks with `scripts/taiga-story.sh <ref> 3 --with-tasks` and find the task at status 14 whose id is in `openTaskIds` but not yet in `verifiedTaskIds`:
 +   - `rev-list` non-empty → the work landed. Re-fetch tasks with `scripts/taiga-story.sh <ref> 4 --with-tasks` and find the task with `status_extra_info.is_closed == true` whose id is in `openTaskIds` but not yet in `verifiedTaskIds`:
@@ -1111,7 +1154,7 @@ so that `tests/test_skills.py` can forbid it in the installed closure. Unified d
 
  3. Each agent gets a completely fresh context window — no accumulated state from previous tasks.
 
-@@ -163,15 +164,15 @@
+@@ -163,15 +165,15 @@
 
  ## Step 2a: Verify all tasks are Closed in Taiga
 
@@ -1132,7 +1175,7 @@ so that `tests/test_skills.py` can forbid it in the installed closure. Unified d
  4. Proceed to Step 2b regardless of how many tasks needed closing (as long as all but the gated ones are now confirmed Closed).
 
  Finding open stragglers is routine cleanup, not a failure signal — do NOT escalate merely because tasks were found open. But if `update_task` fails (the task remains open after the update attempt), that IS a failure — escalate. File a separate bug only if the same task keeps reappearing as "open" across multiple runs (which would indicate a deeper issue).
-@@ -216,119 +217,36 @@
+@@ -216,119 +218,36 @@
     b. When agent returns, check its output:
        - If the rebase was escalated (conflict too complex), set `phase = "escalated"`, `escalationReason = "rebase conflict escalated"`, and **STOP**.
        - If the rebase succeeded, proceed.
@@ -1255,22 +1298,22 @@ so that `tests/test_skills.py` can forbid it in the installed closure. Unified d
 -5. Add PR link to Taiga story as a comment:
 -   `scripts/taiga-comment.sh <id> "PR: https://github.com/Alterna-Dev-Studio/you-thon/pull/<prNumber>"`
 -6. Post PR comment:
-+1. Update state file: `phase = "complete"` — its own Bash call, never combined with any kill
-+2. Re-assert the story status "Ready for test" (finalize-story-pr already set it; this guards against a later change): `update_user_story(user_story_id=<id>, kwargs={"status": <ready_for_test_id>})`
-+3. Assign story to Jon: `assign_user_story_to_user(user_story_id=<id>, user_id=<jon_id>)`
-+4. Add the PR link to the Taiga story as a comment only if finalize-story-pr's report does not show that it already posted one: `scripts/taiga-comment.sh <id> "PR: <url>"` with `<url>` from `gh pr view <prNumber> --json url -q .url`.
-+5. Post PR comment:
++1. Re-assert the story status "Ready for test" (finalize-story-pr already set it; this guards against a later change): `update_user_story(user_story_id=<id>, kwargs={"status": <ready_for_test_id>})`
++2. Assign story to Jon: `assign_user_story_to_user(user_story_id=<id>, user_id=<jon_id>)`
++3. Add the PR link to the Taiga story as a comment only if finalize-story-pr's report does not show that it already posted one: `scripts/taiga-comment.sh <id> "PR: <url>"` with `<url>` from `gh pr view <prNumber> --json url -q .url`.
++4. Post PR comment:
     ```
 -   gh pr comment <number> --body "Story implementation complete. All checks passing, all comments resolved, manual testing passed. Ready for review."
 +   gh pr comment <prNumber> --body "Story implementation complete. Test suite passing, all review threads resolved. Ready for Jon to review."
     ```
 -7. Shut down the app: `dotnet run -- Reset` — its own Bash call; no manual `pkill` (`Reset` stops Projector/Watchdog)
 -8. Report success to user with PR link, the base branch this run used, and whether it came from the argument or the `defaultBranchRef` lookup.
++5. Only after items 1 to 4 have all succeeded, update state file: `phase = "complete"` — its own Bash call, never combined with any kill. Writing the terminal phase last means an interrupted run resumes at `"monitoring"` and redoes the tracker and PR writes instead of treating them as done.
 +6. Report success to user with PR link, the base branch this run used, and whether it came from the argument or the `defaultBranchRef` lookup.
 
  ## Error handling
 
-@@ -340,9 +258,5 @@
+@@ -340,9 +259,5 @@
  The resume check at the top of Step 1 decides whether this run resumes (`--resume` in the arguments, or an existing non-terminal state file) and recovers the state. It then jumps to the step for `phase`:
    - `"implementing"` → Step 2 (or Step 2b if all tasks are done but `testReviewComplete` is false)
    - `"monitoring"` → Step 3b (rebase check), then Step 4
@@ -1323,9 +1366,12 @@ so that `tests/test_skills.py` can forbid it in the installed closure. Unified d
  ---
 
  # Implement Task — Story #$ARGUMENTS
-@@ -52,7 +47,7 @@
+@@ -50,9 +45,9 @@
+   ```
+
  Check out the branch:
- 1. `git checkout <branch-name> && git pull`
+-1. `git checkout <branch-name> && git pull`
++1. `git checkout <branch-name>`, then `git pull origin <branch-name>` only if `git ls-remote --exit-code --heads origin <branch-name>` succeeds. Never run a bare `git pull`: a branch just cut from `origin/<base>` tracks the base, so a bare pull would merge base commits into the story branch and the orchestrator could count that merge as the task's commit.
  2. If the branch doesn't exist locally: `git fetch origin <branch-name> && git checkout <branch-name>`
 -3. If it doesn't exist at all: `git fetch origin +<base>:refs/remotes/origin/<base> && git checkout -b <branch-name> origin/<base>` — this fallback only fires if the branch-creation step in the calling skill (`/fully-implement-story` or `/implement-story`) was skipped or failed, since normally the branch already exists by the time this skill runs. Fetch `<base>` explicitly with the `:refs/remotes/origin/<base>` destination rather than a bare `git fetch origin`: in the shallow single-branch clones `scripts/devcontainer/launch.sh` creates, the clone's `remote.origin.fetch` refspec is restricted to the cloned branch, so a bare fetch never retrieves `<base>`, and fetching it without a destination only populates `FETCH_HEAD`, not the `origin/<base>` ref this command consumes.
 +3. If it doesn't exist at all: `git fetch origin +<base>:refs/remotes/origin/<base> && git checkout -b <branch-name> origin/<base>` — this fallback only fires if the branch-creation step in the calling skill (`/fully-implement-story` or `/implement-story`) was skipped or failed, since normally the branch already exists by the time this skill runs.
@@ -1986,8 +2032,9 @@ so that `tests/test_skills.py` can forbid it in the installed closure. Unified d
  **Resume check — do this before anything else in Step 1.** You are resuming when `--resume` is present, or when `/tmp/fully-implement-<ref>.json` already exists with a non-terminal `phase` (an interactive re-invoke). The story is already In progress with work on disk: do not start over, and do not ask — resume.
 
 -1. Recover the state. If `/tmp/fully-implement-<ref>.json` exists, read it and do not overwrite it. If it does not (the container was replaced; the clone survived), rebuild it from what is on disk and in Taiga:
+-   - `featureBranch`: `git branch -a --format='%(refname:short)' | grep -E '^(origin/)?feature/.+-<ref>$'` — the anchored match matters for the reasons given in 1c.1; drop a leading `origin/` from the match. The branch may exist only locally.
 +1. Recover the state. If `/tmp/fully-implement-<ref>.json` exists, read it and do not overwrite it. If it does not (the checkout survived but the state file did not), rebuild it from what is on disk and in Taiga:
-    - `featureBranch`: `git branch -a --format='%(refname:short)' | grep -E '^(origin/)?feature/.+-<ref>$'` — the anchored match matters for the reasons given in 1c.1; drop a leading `origin/` from the match. The branch may exist only locally.
++   - `featureBranch`: `git branch -a --format='%(refname:short)' | grep -E '^(origin/)?feature/.+-<ref>$' | sed 's#^origin/##' | sort -u` — the anchored match matters for the reasons given in 1c.1; the `sed`/`sort -u` collapse a local branch and its `origin/` counterpart into one name, so expect exactly one line (more than one means two stories' branches share the ref: escalate). The branch may exist only locally.
     - Look up any existing PR once: `gh pr list --head <branch> --state all --json number,baseRefName --jq '.[0]'` (null if none).
 -   - `baseBranch`: the existing PR's `baseRefName` from the lookup above, if a PR was found — the PR already records the base it was opened against, so this survives a relaunch that passes only `<ref>` (e.g. `$implement-epic` retrying after replacing the container). Otherwise, `<base-branch>` from Step 0 (the argument if given, otherwise the `defaultBranchRef` lookup).
 +   - `baseBranch`: the existing PR's `baseRefName` from the lookup above, if a PR was found — the PR already records the base it was opened against, so this survives a relaunch that passes only `<ref>`. Otherwise, `<base-branch>` from Step 0 (the argument if given, otherwise the `defaultBranchRef` lookup).
@@ -2004,9 +2051,11 @@ so that `tests/test_skills.py` can forbid it in the installed closure. Unified d
 
  ### 1c. Set up branch
 
- 1. Check for existing branch: `git branch -a --format='%(refname:short)' | grep -E '^(origin/)?feature/.+-<ref>$'` — anchoring on the `feature/<slug>-<ref>` convention this skill creates is what keeps the match to this story's own branch. An unanchored substring match on the bare ref also matches the base branch the clone is sitting on when that name ends in this story's ref (a multi-parent story is cloned onto `epic/<epic-ref>-integration-<ref>`), and it matches longer refs too (`274` matches `feature/x-2745`). A base branch is never this story's own branch.
- 2. If branch exists: `git checkout <branch-name> && git pull` — `<branch-name>` is the match with any leading `origin/` dropped, so that `git checkout` creates the tracking branch.
+-1. Check for existing branch: `git branch -a --format='%(refname:short)' | grep -E '^(origin/)?feature/.+-<ref>$'` — anchoring on the `feature/<slug>-<ref>` convention this skill creates is what keeps the match to this story's own branch. An unanchored substring match on the bare ref also matches the base branch the clone is sitting on when that name ends in this story's ref (a multi-parent story is cloned onto `epic/<epic-ref>-integration-<ref>`), and it matches longer refs too (`274` matches `feature/x-2745`). A base branch is never this story's own branch.
+-2. If branch exists: `git checkout <branch-name> && git pull` — `<branch-name>` is the match with any leading `origin/` dropped, so that `git checkout` creates the tracking branch.
 -3. If no branch: `git fetch origin +<base-branch>:refs/remotes/origin/<base-branch> && git checkout -b feature/<slug>-<ref> origin/<base-branch>` — fetching the named ref explicitly (not a bare `git fetch origin`, and not `git fetch origin <base-branch>` alone) matters in the shallow single-branch clones `scripts/devcontainer/launch.sh` creates: the clone's `remote.origin.fetch` refspec is restricted to the branch it was cloned from, so a bare fetch never retrieves a stacked predecessor's branch, and fetching the ref without a destination only populates `FETCH_HEAD` — the `:refs/remotes/origin/<base-branch>` destination is what creates the `origin/<base-branch>` ref this command consumes.
++1. Check for existing branch: `git branch -a --format='%(refname:short)' | grep -E '^(origin/)?feature/.+-<ref>$' | sed 's#^origin/##' | sort -u` — expect at most one line (the `sed`/`sort -u` collapse a local branch and its `origin/` counterpart); anchoring on the `feature/<slug>-<ref>` convention this skill creates is what keeps the match to this story's own branch. An unanchored substring match on the bare ref also matches the base branch the clone is sitting on when that name ends in this story's ref (a multi-parent story is cloned onto `epic/<epic-ref>-integration-<ref>`), and it matches longer refs too (`274` matches `feature/x-2745`). A base branch is never this story's own branch.
++2. If branch exists: `git checkout <branch-name>` (the deduplicated name, so that `git checkout` creates the tracking branch when only `origin/` has it), then `git pull origin <branch-name>` only if `git ls-remote --exit-code --heads origin <branch-name>` succeeds. Never a bare `git pull`: a local-only branch cut from `origin/<base-branch>` tracks the base, and a bare pull would merge base commits into the story branch.
 +3. If no branch: `git fetch origin +<base-branch>:refs/remotes/origin/<base-branch> && git checkout -b feature/<slug>-<ref> origin/<base-branch>` — fetch the named ref explicitly (not a bare `git fetch origin`, and not `git fetch origin <base-branch>` alone): a bare fetch does not retrieve a stacked predecessor's branch when the clone's `remote.origin.fetch` refspec is restricted, and fetching the ref without a destination only populates `FETCH_HEAD` — the `:refs/remotes/origin/<base-branch>` destination is what creates the `origin/<base-branch>` ref this command consumes.
 
  ### 1d. Initialize state file
@@ -2027,7 +2076,7 @@ so that `tests/test_skills.py` can forbid it in the installed closure. Unified d
 
  ### 1e. Set story to "In progress"
 
-@@ -133,11 +131,11 @@
+@@ -133,13 +131,13 @@
  1. **Record the branch tip, then spawn a fresh `senior-software-developer` agent:**
     - Before spawning: run `git rev-parse <branch-name>` (the current directory is the checkout, as for every other git command in this skill) and store the result in the state file as `preSpawnTip`. Shell variables do not survive across tool calls, so the check below substitutes the literal SHA from the state file.
     - `agent_type: "worker"` with senior-software-developer role instructions
@@ -2039,8 +2088,11 @@ so that `tests/test_skills.py` can forbid it in the installed closure. Unified d
 -2. **When agent returns**, verify the branch, not the report. Report formatting is known-flaky (bug #1840), so the completion signal is `git rev-list <preSpawnTip>..<branch-name>` (substitute `<preSpawnTip>` from the state file): non-empty output means the task's commit landed, whatever SHA the report cites; empty output means the agent returned before finishing (bug #2572). Docs/config-only tasks still commit, so a landed commit is always expected.
 +2. **When agent returns**, verify the branch, not the report. Report formatting is known-flaky, so the completion signal is `git rev-list <preSpawnTip>..<branch-name>` (substitute `<preSpawnTip>` from the state file): non-empty output means the task's commit landed, whatever SHA the report cites; empty output means the agent returned before finishing. Docs/config-only tasks still commit, so a landed commit is always expected.
     - If output contains "BLOCKED:" → the agent hit a permission denial or other unrecoverable issue. Escalate: set `phase = "escalated"`, `escalationReason = "agent blocked: <details>"`, tag story with `escalation-needed`, assign to Jon, and **STOP**.
-    - If output contains one or more `GATED: <task-ref> <reason>` lines → each named task is left open by design and counts as finished, not failed, so never retry it. Resolve each ref to its id with `scripts/taiga-story.sh <ref> <verified-project-id> --with-tasks`; for every id not already in `verifiedTaskIds`, append it to `verifiedTaskIds`, increment `tasksCompleted`, and write the state file. A gated task lands no commit, so when the report gates a task and claims nothing else, skip the `rev-list` checks below and continue the loop. Carry the `GATED:` lines into the final report. See [`references/merge-side-effects.md`](references/merge-side-effects.md).
+-   - If output contains one or more `GATED: <task-ref> <reason>` lines → each named task is left open by design and counts as finished, not failed, so never retry it. Resolve each ref to its id with `scripts/taiga-story.sh <ref> <verified-project-id> --with-tasks`; for every id not already in `verifiedTaskIds`, append it to `verifiedTaskIds`, increment `tasksCompleted`, and write the state file. A gated task lands no commit, so when the report gates a task and claims nothing else, skip the `rev-list` checks below and continue the loop. Carry the `GATED:` lines into the final report. See [`references/merge-side-effects.md`](references/merge-side-effects.md).
++   - If output contains one or more `GATED: <task-ref> <reason>` lines → each named task is left open by design and counts as finished, not failed, so never retry it. Resolve each gated task ref to its task id by fetching the story's task list with `scripts/taiga-story.sh <ref> <verified-project-id> --with-tasks` (the story ref, not the task ref: the helper resolves stories, issues, and epics only) and matching the task ref against `tasks[].ref`; for every id not already in `verifiedTaskIds`, append it to `verifiedTaskIds`, increment `tasksCompleted`, and write the state file. A gated task lands no commit, so when the report gates a task and claims nothing else, skip the `rev-list` checks below and continue the loop. Carry the `GATED:` lines into the final report. See [`references/merge-side-effects.md`](references/merge-side-effects.md).
     - If output contains "All tasks complete" **and** the state file has `tasksCompleted == tasksTotal` → break loop, go to Step 2a. If `tasksCompleted < tasksTotal`, the sentinel is not trusted — a worker closed a task in Taiga without landing its commit — so treat it exactly like an empty `rev-list` and enter the recovery path below.
+    - `rev-list` non-empty → the work landed. Re-fetch tasks with `scripts/taiga-story.sh <ref> <verified-project-id> --with-tasks` and find the task at status `<closed-task-id>` whose id is in `openTaskIds` but not yet in `verifiedTaskIds`:
+      - Found → read state file, append its id to `verifiedTaskIds`, increment `tasksCompleted`, write state file, continue loop.
 @@ -152,7 +150,7 @@
 
  ## Step 2a: Verify all tasks are Closed in Taiga
@@ -2182,17 +2234,17 @@ so that `tests/test_skills.py` can forbid it in the installed closure. Unified d
 -5. Add PR link to Taiga story as a comment:
 -   `scripts/taiga-comment.sh <id> "PR: https://github.com/Alterna-Dev-Studio/you-thon/pull/<prNumber>"`
 -6. Post PR comment:
-+1. Update state file: `phase = "complete"` — its own shell call, never combined with any kill
-+2. Re-assert the story status "Ready for test" (finalize-story-pr already set it; this guards against a later change): `update_user_story(user_story_id=<id>, kwargs={"status": <ready_for_test_id>})`
-+3. Assign story to Jon: `assign_user_story_to_user(user_story_id=<id>, user_id=<jon_id>)`
-+4. Add the PR link to the Taiga story as a comment only if finalize-story-pr's report does not show that it already posted one: `scripts/taiga-comment.sh <id> "PR: <url>"` with `<url>` from `gh pr view <prNumber> --json url -q .url`.
-+5. Post PR comment:
++1. Re-assert the story status "Ready for test" (finalize-story-pr already set it; this guards against a later change): `update_user_story(user_story_id=<id>, kwargs={"status": <ready_for_test_id>})`
++2. Assign story to Jon: `assign_user_story_to_user(user_story_id=<id>, user_id=<jon_id>)`
++3. Add the PR link to the Taiga story as a comment only if finalize-story-pr's report does not show that it already posted one: `scripts/taiga-comment.sh <id> "PR: <url>"` with `<url>` from `gh pr view <prNumber> --json url -q .url`.
++4. Post PR comment:
     ```
 -   gh pr comment <number> --body "Story implementation complete. All checks passing, all comments resolved, manual testing passed. Ready for review."
 +   gh pr comment <prNumber> --body "Story implementation complete. Test suite passing, all review threads resolved. Ready for Jon to review."
     ```
 -7. Shut down the app: `dotnet run -- Reset` — its own Bash call; no manual `pkill` (`Reset` stops Projector/Watchdog)
 -8. Report success to user with PR link, the base branch this run used, and whether it came from the argument or the `defaultBranchRef` lookup.
++5. Only after items 1 to 4 have all succeeded, update state file: `phase = "complete"` — its own shell call, never combined with any kill. Writing the terminal phase last means an interrupted run resumes at `"monitoring"` and redoes the tracker and PR writes instead of treating them as done.
 +6. Report success to user with PR link, the base branch this run used, and whether it came from the argument or the `defaultBranchRef` lookup.
 
  ## Error handling
@@ -2211,9 +2263,12 @@ so that `tests/test_skills.py` can forbid it in the installed closure. Unified d
 
 --- saasdk/2a04165/.agents/skills/implement-task/SKILL.md
 +++ .agents/skills/implement-task/SKILL.md
-@@ -24,7 +24,7 @@
+@@ -22,9 +22,9 @@
+   ```
+
  Check out the branch:
- 1. `git checkout <branch-name> && git pull`
+-1. `git checkout <branch-name> && git pull`
++1. `git checkout <branch-name>`, then `git pull origin <branch-name>` only if `git ls-remote --exit-code --heads origin <branch-name>` succeeds. Never run a bare `git pull`: a branch just cut from `origin/<base>` tracks the base, so a bare pull would merge base commits into the story branch and the orchestrator could count that merge as the task's commit.
  2. If the branch doesn't exist locally: `git fetch origin <branch-name> && git checkout <branch-name>`
 -3. If it doesn't exist at all: `git fetch origin +<base>:refs/remotes/origin/<base> && git checkout -b <branch-name> origin/<base>` — this fallback only fires if the branch-creation step in the calling skill (`$fully-implement-story` or `$implement-story`) was skipped or failed, since normally the branch already exists by the time this skill runs. Fetch `<base>` explicitly with the `:refs/remotes/origin/<base>` destination rather than a bare `git fetch origin`: in the shallow single-branch clones `scripts/devcontainer/launch.sh` creates, the clone's `remote.origin.fetch` refspec is restricted to the cloned branch, so a bare fetch never retrieves `<base>`, and fetching it without a destination only populates `FETCH_HEAD`, not the `origin/<base>` ref this command consumes.
 +3. If it doesn't exist at all: `git fetch origin +<base>:refs/remotes/origin/<base> && git checkout -b <branch-name> origin/<base>` — this fallback only fires if the branch-creation step in the calling skill (`$fully-implement-story` or `$implement-story`) was skipped or failed, since normally the branch already exists by the time this skill runs.

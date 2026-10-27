@@ -10,6 +10,7 @@ allowed-tools:
   - Bash(gh *)
   - Bash(git *)
   - Bash(sleep *)
+  - Bash(pgrep *)
   - Bash(date *)
   - Bash(cat /tmp/*)
   - Bash(rm -f /tmp/*)
@@ -75,7 +76,7 @@ Every later step uses `<base-branch>`, never `main`.
 **Resume check — do this before anything else in Step 1.** You are resuming when `--resume` is present, or when `/tmp/fully-implement-<ref>.json` already exists with a non-terminal `phase` (an interactive re-invoke). The story is already In progress with work on disk: do not start over, and do not ask — resume.
 
 1. Recover the state. If `/tmp/fully-implement-<ref>.json` exists, read it and do not overwrite it. If it does not (the checkout survived but the state file did not), rebuild it from what is on disk and in Taiga:
-   - `featureBranch`: `git branch -a --format='%(refname:short)' | grep -E '^(origin/)?feature/.+-<ref>$'` — the anchored match matters for the reasons given in 1c.1; drop a leading `origin/` from the match. The branch may exist only locally.
+   - `featureBranch`: `git branch -a --format='%(refname:short)' | grep -E '^(origin/)?feature/.+-<ref>$' | sed 's#^origin/##' | sort -u` — the anchored match matters for the reasons given in 1c.1; the `sed`/`sort -u` collapse a local branch and its `origin/` counterpart into one name, so expect exactly one line (more than one means two stories' branches share the ref: escalate). The branch may exist only locally.
    - Look up any existing PR once: `gh pr list --head <branch> --state all --json number,baseRefName --jq '.[0]'` (null if none).
    - `baseBranch`: the existing PR's `baseRefName` from the lookup above, if a PR was found — the PR already records the base it was opened against, so this survives a relaunch that passes only `<ref>`. Otherwise, `<base-branch>` from Step 0 (the argument if given, otherwise the `defaultBranchRef` lookup).
    - `prNumber`: the existing PR's `number` from the lookup above (null if none).
@@ -102,8 +103,8 @@ Every later step uses `<base-branch>`, never `main`.
 
 ### 1c. Set up branch
 
-1. Check for existing branch: `git branch -a --format='%(refname:short)' | grep -E '^(origin/)?feature/.+-<ref>$'` — anchoring on the `feature/<slug>-<ref>` convention this skill creates is what keeps the match to this story's own branch. An unanchored substring match on the bare ref also matches the base branch the clone is sitting on when that name ends in this story's ref (a multi-parent story is cloned onto `epic/<epic-ref>-integration-<ref>`), and it matches longer refs too (`274` matches `feature/x-2745`). A base branch is never this story's own branch.
-2. If branch exists: `git checkout <branch-name> && git pull` — `<branch-name>` is the match with any leading `origin/` dropped, so that `git checkout` creates the tracking branch.
+1. Check for existing branch: `git branch -a --format='%(refname:short)' | grep -E '^(origin/)?feature/.+-<ref>$' | sed 's#^origin/##' | sort -u` — expect at most one line (the `sed`/`sort -u` collapse a local branch and its `origin/` counterpart); anchoring on the `feature/<slug>-<ref>` convention this skill creates is what keeps the match to this story's own branch. An unanchored substring match on the bare ref also matches the base branch the clone is sitting on when that name ends in this story's ref (a multi-parent story is cloned onto `epic/<epic-ref>-integration-<ref>`), and it matches longer refs too (`274` matches `feature/x-2745`). A base branch is never this story's own branch.
+2. If branch exists: `git checkout <branch-name>` (the deduplicated name, so that `git checkout` creates the tracking branch when only `origin/` has it), then `git pull origin <branch-name>` only if `git ls-remote --exit-code --heads origin <branch-name>` succeeds. Never a bare `git pull`: a local-only branch cut from `origin/<base-branch>` tracks the base, and a bare pull would merge base commits into the story branch.
 3. If no branch: `git fetch origin +<base-branch>:refs/remotes/origin/<base-branch> && git checkout -b feature/<slug>-<ref> origin/<base-branch>` — fetch the named ref explicitly (not a bare `git fetch origin`, and not `git fetch origin <base-branch>` alone): a bare fetch does not retrieve a stacked predecessor's branch when the clone's `remote.origin.fetch` refspec is restricted, and fetching the ref without a destination only populates `FETCH_HEAD` — the `:refs/remotes/origin/<base-branch>` destination is what creates the `origin/<base-branch>` ref this command consumes.
 
 ### 1d. Initialize state file
@@ -151,7 +152,7 @@ Loop until all tasks are done:
 
 2. **When agent returns**, verify the branch, not the report. Report formatting is known-flaky, so the completion signal is `git rev-list <preSpawnTip>..<branch-name>` (substitute `<preSpawnTip>` from the state file): non-empty output means the task's commit landed, whatever SHA the report cites; empty output means the agent returned before finishing. Docs/config-only tasks still commit, so a landed commit is always expected.
    - If output contains "BLOCKED:" → the agent hit a permission denial or other unrecoverable issue. Escalate: set `phase = "escalated"`, `escalationReason = "agent blocked: <details>"`, tag story with `escalation-needed`, assign to Jon, and **STOP**.
-   - If output contains one or more `GATED: <task-ref> <reason>` lines → each named task is left open by design and counts as finished, not failed, so never retry it. Resolve each ref to its id with `scripts/taiga-story.sh <ref> 4 --with-tasks`; for every id not already in `verifiedTaskIds`, append it to `verifiedTaskIds`, increment `tasksCompleted`, and write the state file. A gated task lands no commit, so when the report gates a task and claims nothing else, skip the `rev-list` checks below and continue the loop. Carry the `GATED:` lines into the final report. See [`../shared/merge-side-effects.md`](../shared/merge-side-effects.md).
+   - If output contains one or more `GATED: <task-ref> <reason>` lines → each named task is left open by design and counts as finished, not failed, so never retry it. Resolve each gated task ref to its task id by fetching the story's task list with `scripts/taiga-story.sh <ref> 4 --with-tasks` (the story ref, not the task ref: the helper resolves stories, issues, and epics only) and matching the task ref against `tasks[].ref`; for every id not already in `verifiedTaskIds`, append it to `verifiedTaskIds`, increment `tasksCompleted`, and write the state file. A gated task lands no commit, so when the report gates a task and claims nothing else, skip the `rev-list` checks below and continue the loop. Carry the `GATED:` lines into the final report. See [`../shared/merge-side-effects.md`](../shared/merge-side-effects.md).
    - If output contains "All tasks complete" **and** the state file has `tasksCompleted == tasksTotal` → break loop, go to Step 2a. If `tasksCompleted < tasksTotal`, the sentinel is not trusted — a worker closed a task in Taiga without landing its commit — so treat it exactly like an empty `rev-list` and enter the recovery path below.
    - `rev-list` non-empty → the work landed. Re-fetch tasks with `scripts/taiga-story.sh <ref> 4 --with-tasks` and find the task with `status_extra_info.is_closed == true` whose id is in `openTaskIds` but not yet in `verifiedTaskIds`:
      - Found → read state file, append its id to `verifiedTaskIds`, increment `tasksCompleted`, write state file, continue loop.
@@ -238,14 +239,14 @@ There is no manual-testing phase in this repository: it has no application to ex
 
 ## Step 9: Success
 
-1. Update state file: `phase = "complete"` — its own Bash call, never combined with any kill
-2. Re-assert the story status "Ready for test" (finalize-story-pr already set it; this guards against a later change): `update_user_story(user_story_id=<id>, kwargs={"status": <ready_for_test_id>})`
-3. Assign story to Jon: `assign_user_story_to_user(user_story_id=<id>, user_id=<jon_id>)`
-4. Add the PR link to the Taiga story as a comment only if finalize-story-pr's report does not show that it already posted one: `scripts/taiga-comment.sh <id> "PR: <url>"` with `<url>` from `gh pr view <prNumber> --json url -q .url`.
-5. Post PR comment:
+1. Re-assert the story status "Ready for test" (finalize-story-pr already set it; this guards against a later change): `update_user_story(user_story_id=<id>, kwargs={"status": <ready_for_test_id>})`
+2. Assign story to Jon: `assign_user_story_to_user(user_story_id=<id>, user_id=<jon_id>)`
+3. Add the PR link to the Taiga story as a comment only if finalize-story-pr's report does not show that it already posted one: `scripts/taiga-comment.sh <id> "PR: <url>"` with `<url>` from `gh pr view <prNumber> --json url -q .url`.
+4. Post PR comment:
    ```
    gh pr comment <prNumber> --body "Story implementation complete. Test suite passing, all review threads resolved. Ready for Jon to review."
    ```
+5. Only after items 1 to 4 have all succeeded, update state file: `phase = "complete"` — its own Bash call, never combined with any kill. Writing the terminal phase last means an interrupted run resumes at `"monitoring"` and redoes the tracker and PR writes instead of treating them as done.
 6. Report success to user with PR link, the base branch this run used, and whether it came from the argument or the `defaultBranchRef` lookup.
 
 ## Error handling
