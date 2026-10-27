@@ -38,6 +38,7 @@ application code, no F#, no .NET, and no CI test gate. See [README.md](README.md
 ## Agent Skills
 Native SAASDK skills are installed under `.claude/skills/` (Claude Code) and `.agents/skills/`
 (Codex): `analyze-story`, `implement-story`, `pr-converse`, `review-tests`, `codex-review-pr`.
+`pr-comments-resolve` (resolve review threads) is installed for both from you-thon.
 Provenance, per-file hashes, and the consumer-local patches are in
 [docs/saasdk-install.md](docs/saasdk-install.md). Codex bodies read this file first; the
 section above is the consumer-local mapping they require.

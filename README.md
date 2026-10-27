@@ -65,7 +65,7 @@ For a devcontainer, launch VS Code or the devcontainer CLI from a host shell tha
 
 ## Agent skills
 
-SAASDK native skills `analyze-story`, `implement-story`, `pr-converse`, `review-tests`, and `codex-review-pr` are installed for Claude Code (`.claude/skills/`) and Codex (`.agents/skills/`). `AGENTS.md` holds the consumer-local Taiga mapping they read first; `docs/saasdk-install.md` records the pinned sources, per-file hashes, patches, and verification.
+SAASDK native skills `analyze-story`, `implement-story`, `pr-converse`, `review-tests`, and `codex-review-pr` are installed for Claude Code (`.claude/skills/`) and Codex (`.agents/skills/`). `pr-comments-resolve`, copied from you-thon, is installed for both and resolves PR review threads. `AGENTS.md` holds the consumer-local Taiga mapping they read first; `docs/saasdk-install.md` records the pinned sources, per-file hashes, patches, and verification.
 
 Run the tests with `python3 -m unittest discover -s tests`. They use a temporary home directory and never touch your key or vault.
 
