@@ -5,8 +5,8 @@ argument-hint: "<branch-name-or-pr-number>"
 allowed-tools:
   - Bash(git *)
   - Bash(gh *)
-  - Bash(dotnet run *)
-  - Bash(dotnet build *)
+  - Bash(python3 -m unittest *)
+  - Bash(timeout 590 python3 -m unittest *)
   - Bash(scripts/taiga-comment.sh *)
   - mcp__taiga-py__get_user_story_by_ref
   - Read
@@ -33,11 +33,11 @@ Also read `docs/testing-conventions.md` for framework-specific conventions (cloc
    - If argument is a branch name: `git diff origin/main...<branch>`
 2. List all changed test files:
    ```bash
-   git diff --name-only origin/main...<branch> -- 'tests/**/*.fs' 'src/Client/tests/**'
+   git diff --name-only origin/main...<branch> -- 'tests/*.py'
    ```
 3. Also list all changed production source files:
    ```bash
-   git diff --name-only origin/main...<branch> -- 'src/**/*.fs' ':!src/Client/tests/**'
+   git diff --name-only origin/main...<branch> -- 'profile.sh' 'shell/*.sh' 'scripts/*' ':!scripts/*.md'
    ```
 4. If no test files changed:
    - If production source files also changed, report an ERROR: "Production code changed on this branch with no corresponding test changes. Tests are required for all feature and bugfix changes (see CLAUDE.md). Review the changes and add appropriate tests before proceeding."
@@ -115,7 +115,7 @@ For each issue found:
 
 ## Step 5: Verify changes
 
-Run the affected test suites per [docs/testing-workflow.md](../../../docs/testing-workflow.md). Read `test-results/*.xml` for pass/fail status. If any test fails due to the review changes, fix it before proceeding.
+Run `timeout 590 python3 -m unittest discover -s tests -v` per [docs/testing-workflow.md](../../../docs/testing-workflow.md) and read the unittest output for pass/fail status (there are no JUnit XML result files here). If any test fails due to the review changes, fix it before proceeding.
 
 ## Step 6: Commit and document
 

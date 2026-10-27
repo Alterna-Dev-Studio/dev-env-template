@@ -40,7 +40,7 @@ If the review requires no fix, skip commit and push; verify the live head still 
 4. If edits are authorized, fix confirmed issues according to that consumer's suite and framework conventions. Verify with its documented command and read its actual result format. If a required tool or fixture is unavailable, report the precise verification gap; do not substitute a different test command and claim success.
 5. Commit and publish review comments or tracker updates only when those stages are authorized and their repository-specific instructions, targets, and helpers have been verified. Use the consumer's attribution and branch policy. Otherwise return the findings and verification results without writes.
 
-For the dev-env-template S09 pilot, `docs/testing-strategy.md`, `docs/testing-conventions.md`, `README.md`, and the actual `tests/*.py` suite provide the Bash/Python mapping. Verify that `tests/test_shell.py` and `tests/test_scripts.py` cover changed Bash/Python code, and run `python3 -m unittest discover -s tests -v` when test execution is authorized. Its result is unittest console output; it has no F#, `.fsproj`, .NET, browser, or JUnit XML suite. The S09 read-only pilot authorizes review only, so stop before edits, tests, commits, PR comments, or tracker updates.
+For the dev-env-template S09 pilot, `docs/testing-strategy.md`, `docs/testing-conventions.md`, `README.md`, and the actual `tests/*.py` suite provide the Bash/Python mapping. Verify that `tests/test_shell.py` and `tests/test_scripts.py` cover changed Bash/Python code, and run `python3 -m unittest discover -s tests -v` when test execution is authorized. Its result is unittest console output; it has no F#, `.fsproj`, .NET, browser, or JUnit XML suite. When spawned by `$fully-implement-story` or `$finalize-story-pr` as the test-quality gate, edits, test execution, and commits on the story branch are authorized and expected; a standalone read-only invocation stops before edits, tests, commits, PR comments, or tracker updates.
 
 ## You-Thon procedure (verified You-Thon checkout only)
 
@@ -57,11 +57,11 @@ Also read `docs/testing-conventions.md` for framework-specific conventions (cloc
    - If argument is a branch name: verify its intended comparison base from the consumer's branch policy, then resolve and record the actual base and branch commit SHAs. Confirm against the remote when the branch is published. Use those SHAs for every diff; stop if the branch/base cannot be verified.
 2. List all changed test files:
    ```bash
-   git diff --name-only <verified-base-sha>...<verified-head-sha> -- 'tests/**/*.fs' 'src/Client/tests/**'
+   git diff --name-only <verified-base-sha>...<verified-head-sha> -- 'tests/*.py'
    ```
 3. Also list all changed production source files:
    ```bash
-   git diff --name-only <verified-base-sha>...<verified-head-sha> -- 'src/**/*.fs' ':!src/Client/tests/**'
+   git diff --name-only <verified-base-sha>...<verified-head-sha> -- 'profile.sh' 'shell/*.sh' 'scripts/*' ':!scripts/*.md'
    ```
 4. If no test files changed:
    - If production source files also changed, report an ERROR: "Production code changed on this branch with no corresponding test changes. Tests are required for all feature and bugfix changes (see AGENTS.md or CLAUDE.md). Review the changes and add appropriate tests before proceeding."
@@ -139,7 +139,7 @@ For each issue found:
 
 ### Step 5: Verify changes
 
-Run the affected test suites per `docs/testing-workflow.md`. Read `test-results/*.xml` for pass/fail status. If any test fails due to the review changes, fix it before proceeding.
+Run `timeout 590 python3 -m unittest discover -s tests -v` per `docs/testing-workflow.md` and read the unittest output for pass/fail status (there are no JUnit XML result files here). If any test fails due to the review changes, fix it before proceeding.
 
 ### Step 6: Commit and document
 

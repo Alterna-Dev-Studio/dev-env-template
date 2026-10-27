@@ -31,6 +31,8 @@ application code, no F#, no .NET, and no CI test gate. See [README.md](README.md
   The launcher uses `TAIGA_*` from the environment when present and otherwise decrypts this
   repository's SOPS profile; it needs the pytaiga-mcp checkout from `scripts/setup-taiga-mcp`. Check `get_default_session` first and
   prefer `login()` without explicit credentials.
+- Task statuses: resolve `New`, `In progress`, `Closed` by name from
+  `get_task_statuses(project_id=4)` (works in full mode).
 - Merge automation (`taiga-update-on-merge.sh`, `taiga-sync.yml`) is **not** installed here.
   The `close-tasks-on-merge` and `mark-done-on-merge` labels and tags are recorded for
   planning only and have no effect on merge.
@@ -39,6 +41,11 @@ application code, no F#, no .NET, and no CI test gate. See [README.md](README.md
 Native SAASDK skills are installed under `.claude/skills/` (Claude Code) and `.agents/skills/`
 (Codex): `analyze-story`, `implement-story`, `pr-converse`, `review-tests`, `codex-review-pr`.
 `pr-comments-resolve` (resolve review threads) is installed for both from you-thon.
+`fully-implement-story` (run a story end to end with worker agents) is installed for both
+with its closure `implement-task`, `finalize-story-pr`, and `rebase-branch`; its worker roles
+are `.claude/agents/` (Claude Code) and `.codex/agents/` (Codex): `senior-software-developer`,
+`test-quality-reviewer`, `remediation-developer`. It has no CI-monitoring or manual-testing
+phase here.
 Provenance, per-file hashes, and the consumer-local patches are in
 [docs/saasdk-install.md](docs/saasdk-install.md). Codex bodies read this file first; the
 section above is the consumer-local mapping they require.
