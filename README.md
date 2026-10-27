@@ -2,6 +2,15 @@
 
 A small, reusable home for shared development-tool configuration. Secrets live in SOPS-encrypted JSON; the age identity stays outside Git. `profile.sh` sources portable PATH and optional alias fragments, then loads shared credentials. Project `.envrc` files can load additional encrypted values.
 
+## Quickstart
+
+```bash
+gh repo create my-dev-env --template Alterna-Dev-Studio/dev-env-template --private --clone
+cd my-dev-env && ./scripts/setup && ./scripts/envtool edit profile
+```
+
+The editor opens the decrypted profile as JSON; add the [required variables](#shared-variables) and any personal ones, then save. Open a new Bash shell. Everything below explains what those two commands did and how to add project-scoped secrets.
+
 ## Setup
 
 Requirements: Bash, Python 3, `direnv`, `sops` (3.9 or newer), and `age-keygen`. On Debian or Ubuntu, `sudo apt install direnv age` covers direnv and age; install SOPS from the `.deb` on its [releases page](https://github.com/getsops/sops/releases) and compare its SHA-256 with the digest GitHub shows for that file (the release checksum list omits packages). With Go, `go install github.com/getsops/sops/v3/cmd/sops@latest` and `go install filippo.io/age/cmd/age-keygen@latest` also work; the scripts find binaries in `~/go/bin` too.
@@ -9,22 +18,40 @@ Requirements: Bash, Python 3, `direnv`, `sops` (3.9 or newer), and `age-keygen`.
 The age identity is read from `$SOPS_AGE_KEY_FILE`, else `$XDG_CONFIG_HOME/sops/age/keys.txt`, else `~/.config/sops/age/keys.txt`, matching SOPS. Encryption always uses the recipients in `.sops.yaml`, so the key file may hold other identities too. To let another key decrypt the vault, add it to the `age:` list in `.sops.yaml` (comma-separated) and run `sops updatekeys` on each file under `secrets/`.
 
 1. Create a private repository from this GitHub template and clone it.
-2. Run `./scripts/setup --add-keys`. This creates `~/.config/sops/age/keys.txt`, `.sops.yaml`, and an encrypted profile, prompts for shared tool credentials with hidden input, then adds guarded source lines to `~/.bashrc` and the Bash login file (`~/.profile` unless `~/.bash_profile` or `~/.bash_login` exists). It adds the direnv hook if `.bashrc` lacks one, after the profile source. Plain `./scripts/setup` skips the prompts.
+2. Run `./scripts/setup`. This creates `~/.config/sops/age/keys.txt`, `.sops.yaml`, and an encrypted profile, then adds guarded source lines to `~/.bashrc` and the Bash login file (`~/.profile` unless `~/.bash_profile` or `~/.bash_login` exists). It adds the direnv hook if `.bashrc` lacks one, after the profile source, and names any [required variable](#shared-variables) the profile still lacks.
 3. Back up the age identity securely. Anyone with that file can decrypt the vault; losing it makes the vault unrecoverable.
-4. Add shared credentials with `./scripts/envtool set profile TAIGA_PASSWORD` (input is hidden), or `./scripts/envtool edit profile`.
+4. Add shared variables with `./scripts/envtool set profile TAIGA_PASSWORD` (input is hidden), or `./scripts/envtool edit profile`.
 5. Start a new Bash shell. `./scripts/envtool list profile` displays names only.
 
-If existing shared exports are already in `.bashrc` and present in the current shell, use `./scripts/setup --migrate-bashrc`. It encrypts and verifies them before removing their old export lines. Review the encrypted variable names with `envtool list`; secret values are never printed by setup.
+If `.bashrc` already exports values you want in the vault, run `./scripts/setup --migrate-bashrc NAME...` from a shell where they are set. It encrypts and verifies the named values before removing their export lines; other exports are left alone. Review the encrypted variable names with `envtool list`; secret values are never printed by setup.
 
 `shell/paths.sh` adds existing user tool directories without duplicating PATH entries, keeping `~/.local/bin` first for Herdr and Collie. It sets Volta, pnpm, and Fly home variables. Put personal interactive Bash aliases in `shell/aliases.sh` in your private copy. Keep machine-specific display, SSH relay, Docker, and system installation settings in the machine bootstrap. If you previously set the same portable paths or aliases in `.bashrc` or `.profile`, remove those old lines after confirming the new profile works.
 
+## Shared variables
+
+The profile scope holds values every shell gets. The repository's own tooling needs only these:
+
+| Variable | Needed by | |
+|---|---|---|
+| `TAIGA_API_URL`, `TAIGA_USERNAME`, `TAIGA_PASSWORD` | `scripts/taiga-story.sh`, `scripts/taiga-comment.sh`, and the Taiga MCP launcher | Required; setup reports any that are missing |
+| `GH_TOKEN` | `gh`, and the devcontainer example's `containerEnv` | Optional; `gh auth login` works instead |
+
+Add anything else your own tools read, such as package or API tokens, the same way.
+
+Choose a scope by who reads the value:
+
+- Use the profile when a tool starts outside a project directory: user-wide MCP servers, `gh`, and devcontainer `containerEnv`, which reads the host shell at launch, so direnv values never reach it.
+- Use the profile for values that are the same in every repository, such as your Taiga login.
+- Use a project scope through direnv for values that differ per project or carry a large blast radius, such as a production Stripe key; it then exists only inside that project's directory.
+- When the same value shows up in several project scopes, move it: `./scripts/envtool set profile NAME`, then remove it from each project with `./scripts/envtool edit project/<project>`.
+
 ## Project variables
 
-Add a project value with `./scripts/envtool set project/my-project STRIPE_SECRET_KEY`. In that project's `.envrc`, use:
+Add a project value with `./scripts/envtool set project/my-project STRIPE_SECRET_KEY`. `profile.sh` exports `DEV_ENV_HOME`, the directory of this clone, so project `.envrc` files never hardcode its location. In that project's `.envrc`, use:
 
 ```bash
-watch_file "$HOME/work/utils/jon-dev-env/secrets/project/my-project.enc.json"
-_dev_env_exports="$("$HOME/work/utils/jon-dev-env/scripts/envtool" export project/my-project)" || exit 1
+watch_file "$DEV_ENV_HOME/secrets/project/my-project.enc.json"
+_dev_env_exports="$("$DEV_ENV_HOME/scripts/envtool" export project/my-project)" || exit 1
 eval "$_dev_env_exports"; unset _dev_env_exports
 ```
 
@@ -38,7 +65,7 @@ For a devcontainer, launch VS Code or the devcontainer CLI from a host shell tha
 
 ## Agent skills
 
-SAASDK native skills `analyze-story`, `implement-story`, `pr-converse`, `review-tests`, and `codex-review-pr` are installed for Claude Code (`.claude/skills/`) and Codex (`.agents/skills/`). `AGENTS.md` holds the consumer-local Taiga mapping they read first; `docs/saasdk-install.md` records the pinned sources, per-file hashes, patches, and verification.
+SAASDK native skills `analyze-story`, `implement-story`, `pr-converse`, `review-tests`, and `codex-review-pr` are installed for Claude Code (`.claude/skills/`) and Codex (`.agents/skills/`). `pr-comments-resolve`, copied from you-thon, is installed for both and resolves PR review threads. `AGENTS.md` holds the consumer-local Taiga mapping they read first; `docs/saasdk-install.md` records the pinned sources, per-file hashes, patches, and verification.
 
 Run the tests with `python3 -m unittest discover -s tests`. They use a temporary home directory and never touch your key or vault.
 

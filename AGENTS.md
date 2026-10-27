@@ -28,8 +28,8 @@ application code, no F#, no .NET, and no CI test gate. See [README.md](README.md
   for Claude Code in this repository, overriding any user-level `workflow` server. The installed
   Claude skill bodies and their `mcp__taiga-py__*` grants are written against full mode
   (`get_user_story`, `get_user_story_statuses`, `list_epics`, ...), so the names match as is.
-  The launcher decrypts Taiga credentials from this repository's SOPS profile and needs the
-  pytaiga-mcp checkout from `scripts/setup-taiga-mcp`. Check `get_default_session` first and
+  The launcher uses `TAIGA_*` from the environment when present and otherwise decrypts this
+  repository's SOPS profile; it needs the pytaiga-mcp checkout from `scripts/setup-taiga-mcp`. Check `get_default_session` first and
   prefer `login()` without explicit credentials.
 - Merge automation (`taiga-update-on-merge.sh`, `taiga-sync.yml`) is **not** installed here.
   The `close-tasks-on-merge` and `mark-done-on-merge` labels and tags are recorded for
@@ -38,6 +38,7 @@ application code, no F#, no .NET, and no CI test gate. See [README.md](README.md
 ## Agent Skills
 Native SAASDK skills are installed under `.claude/skills/` (Claude Code) and `.agents/skills/`
 (Codex): `analyze-story`, `implement-story`, `pr-converse`, `review-tests`, `codex-review-pr`.
+`pr-comments-resolve` (resolve review threads) is installed for both from you-thon.
 Provenance, per-file hashes, and the consumer-local patches are in
 [docs/saasdk-install.md](docs/saasdk-install.md). Codex bodies read this file first; the
 section above is the consumer-local mapping they require.

@@ -27,7 +27,7 @@ class ScriptTests(unittest.TestCase):
         shutil.copy2(ROOT / "profile.sh", self.repo / "profile.sh")
         shutil.copytree(ROOT / "shell", self.repo / "shell")
         self.env = {key: value for key, value in os.environ.items()
-                    if not key.startswith(("SOPS_", "XDG_CONFIG_HOME"))}
+                    if not key.startswith(("SOPS_", "XDG_CONFIG_HOME", "TAIGA_"))}
         self.env["HOME"] = str(self.home)
         self.key = self.home / ".config/sops/age/keys.txt"
         self.bashrc = self.home / ".bashrc"
@@ -144,6 +144,18 @@ class ScriptTests(unittest.TestCase):
         self.assertEqual(result.stdout.splitlines(),
                          [str(checkout), "https://taiga.example|u|p|stdio|"])
         self.assertEqual(result.stderr, "")
+        self.env.update({"TAIGA_API_URL": "env.example", "TAIGA_USERNAME": "eu", "TAIGA_PASSWORD": "ep"})
+        result = self.run_script("taiga-mcp", "full")
+        # Environment mode passes Pangolin settings through from the same environment.
+        self.assertEqual(result.stdout.splitlines()[1], "env.example|eu|ep|stdio|stale-host-value")
+        result = self.run_script("taiga-mcp", "full", "profile")
+        self.assertEqual(result.stdout.splitlines()[1], "https://taiga.example|u|p|stdio|")
+        for name in ("TAIGA_API_URL", "TAIGA_USERNAME", "TAIGA_PASSWORD"):
+            del self.env[name]
+        result = self.run_script("taiga-mcp", "full", "project/empty", check=False)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Missing Taiga settings", result.stderr)
+        self.assertNotIn("p", result.stdout)
         self.env["PYTAIGA_MCP_HOME"] = str(self.tmp / "absent")
         result = self.run_script("taiga-mcp", "full", check=False)
         self.assertEqual(result.returncode, 1)
@@ -153,13 +165,44 @@ class ScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("usage:", result.stderr)
 
+    def test_migrate_bashrc_moves_only_named_exports(self):
+        self.bashrc.write_text("export FOO=1\nexport BAR=2\nexport BAZ=3\n")
+        self.env.update({"FOO": "1", "BAR": "2", "BAZ": "3"})
+        self.run_script("setup")
+        self.run_script("setup", "--migrate-bashrc", "FOO", "BAR")
+        self.assertEqual(self.run_script("envtool", "list", "profile").stdout.split(), ["BAR", "FOO"])
+        bashrc = self.bashrc.read_text()
+        self.assertNotIn("export FOO=", bashrc)
+        self.assertNotIn("export BAR=", bashrc)
+        self.assertIn("export BAZ=3", bashrc)
+        result = self.run_script("setup", "--migrate-bashrc", "not-a-name", check=False)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("invalid variable name", result.stderr)
+
+    def test_setup_names_missing_required_taiga_settings(self):
+        result = self.run_script("setup")
+        self.assertIn("Missing required profile values: TAIGA_API_URL, TAIGA_USERNAME, TAIGA_PASSWORD",
+                      result.stdout)
+        self.store("profile", {"TAIGA_API_URL": "https://taiga.example", "TAIGA_USERNAME": "u",
+                               "TAIGA_PASSWORD": "secret-value"})
+        result = self.run_script("setup")
+        self.assertNotIn("Missing required", result.stdout)
+        self.assertNotIn("secret-value", result.stdout + result.stderr)
+
     def test_profile_exports_values_in_bash(self):
         self.run_script("setup")
-        self.store("profile", {"FOO": "it's here"})
+        self.store("profile", {"FOO": "it's here", "DEV_ENV_HOME": "/stale/clone",
+                               "_dev_env_root": "/stale/root"})
         result = subprocess.run(["bash", "-c", f'source {self.repo}/profile.sh; printf %s "$FOO"'],
                                 env=self.env, text=True, capture_output=True, check=True)
         self.assertEqual(result.stdout, "it's here")
         self.assertEqual(result.stderr, "")
+        result = subprocess.run(["bash", "-c", f'source {self.repo}/profile.sh; printf %s "$DEV_ENV_HOME"'],
+                                env=self.env, text=True, capture_output=True, check=True)
+        self.assertEqual(result.stdout, str(self.repo))
+        result = subprocess.run(["bash", "-c", f'source {self.repo}/profile.sh; printf %s "$_DEV_ENV_PROFILE_LOADED"'],
+                                env=self.env, text=True, capture_output=True, check=True)
+        self.assertEqual(result.stdout, str(self.repo))
 
 
 if __name__ == "__main__":

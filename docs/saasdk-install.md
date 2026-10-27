@@ -1,8 +1,8 @@
 # SAASDK native skill install
 
 Status: installed on branch `feat/saasdk-native-skills` from consumer main `11f08cb`
-(2026-10-27). This supersedes the two Codex packages recorded in the
-[S09 pilot](saasdk-s09-pilot.md), which were copied from older SAASDK revisions.
+(2026-10-27). This supersedes the two Codex packages installed by the S09 pilot, which
+were copied from older SAASDK revisions.
 
 ## Sources
 
@@ -272,7 +272,10 @@ framing was removed from `docs/testing-strategy.md` and
   `full`. The repo-level `.mcp.json` therefore launches `taiga-mcp full` so the
   names match without porting the bodies. The launcher is this repository's
   own `scripts/taiga-mcp` (with `scripts/setup-taiga-mcp` to create the
-  pytaiga-mcp checkout), so a fresh clone needs no personal path.
+  pytaiga-mcp checkout), so a fresh clone needs no personal path. The launcher
+  uses `TAIGA_API_URL`, `TAIGA_USERNAME`, and `TAIGA_PASSWORD` from the
+  environment when all three are set and no scope is named, and decrypts a
+  vault scope otherwise, so a checkout without `secrets/` still connects.
 - `.claude/skills/shared/merge-side-effects.md` and
   `.claude/skills/shared/taiga-pagination.md` are byte-identical and still
   show You-Thon status IDs (14, 17, 18) and `project_id=3` in examples.
@@ -357,3 +360,406 @@ Claude full-mode smoke through the repo `.mcp.json` (`--strict-mcp-config
 
 The full `analyze-story` and `implement-story` write paths (Taiga mutation,
 branch, PR) were not exercised by this install.
+
+## pr-comments-resolve (from you-thon)
+
+Source: `Alterna-Dev-Studio/you-thon` at `7988416182ad5b84b7899f83bb8ccf7db5eca955`.
+SAASDK does not ship this skill, so it is copied from the consumer that owns it.
+It is a different skill from `pr-converse`: it works only resolvable review
+threads and sends issue comments and review bodies to `/pr-converse`, which is
+already installed and left unchanged.
+
+### Dependency closure
+
+Computed from both bodies at the pinned commit, following links transitively:
+
+- Claude body: `.claude/skills/shared/test-failure-triage.md`,
+  `.claude/skills/shared/bug-filing.md`, `.claude/skills/shared/commit-attribution.md`,
+  `docs/testing-workflow.md`, `docs/bug-triage.md`, `scripts/taiga-story.sh`,
+  and (through `bug-filing.md`) `scripts/taiga-comment.sh`. It invokes no other
+  skill and delegates to no `.claude/agents` role.
+- Codex body: its own `references/` (the same three companions) plus the same
+  consumer docs and scripts.
+- `.claude/skills/shared/commit-attribution.md` is already installed and
+  byte-identical to the you-thon copy. `docs/testing-workflow.md`,
+  `scripts/taiga-story.sh` (default project 4), and `scripts/taiga-comment.sh`
+  are the consumer-owned versions already in this repository and work as is.
+
+Install commands, from this repository:
+
+```bash
+Y=/home/jon/work/alterna/you-thon
+for f in .claude/skills/pr-comments-resolve/SKILL.md \
+         .claude/skills/shared/test-failure-triage.md .claude/skills/shared/bug-filing.md \
+         .agents/skills/pr-comments-resolve/SKILL.md \
+         .agents/skills/pr-comments-resolve/references/test-failure-triage.md \
+         .agents/skills/pr-comments-resolve/references/bug-filing.md \
+         .agents/skills/pr-comments-resolve/references/commit-attribution.md; do
+  mkdir -p "$(dirname "$f")"
+  git -C "$Y" show 7988416182ad5b84b7899f83bb8ccf7db5eca955:"$f" > "$f"
+done
+```
+
+### Installed files
+
+All files are mode 100644. Hashes are SHA-256.
+
+| Path | Source SHA-256 | Installed |
+| --- | --- | --- |
+| `.claude/skills/pr-comments-resolve/SKILL.md` | `d558ed145b4cc3460ab9dd320dac4686918d77156d1c2cc7b1ec035aa7ea2d97` | patched, `2d8bfcf42643c5f34c55a0bb4c83541a7521fa03fa8546fd0f549620dc1684cf` |
+| `.claude/skills/shared/test-failure-triage.md` | `986039f042632873eec99843d761819d06c24b42909b6fc36790bd166f308958` | patched, `0e62e51538e5782e73f982b4463ada02d98c61e6cf202caed3359f494bc0c27e` |
+| `.claude/skills/shared/bug-filing.md` | `34141f5eea232fe99e013c33f173d3c976534874f3d94f14c1fa4dcb1c50c29e` | patched, `4d91a367d6570144c17696d587fc73bbaa936b8388d35111224991d3a8cae207` |
+| `.claude/skills/shared/commit-attribution.md` | `b357f72263d3cd2409fa5d5c6acb1996ed4f9d4543e84db9a01351f28b56b82c` | already installed, byte-identical |
+| `.agents/skills/pr-comments-resolve/SKILL.md` | `beb66af45fee15f1221e7707e4ac9924e3c5cd6eea2ef944c4c599e83c48b430` | patched, `6a1a2d3636f1a418adc72eb09065309a3aa59ee8638c4462c456b038f9fa2b81` |
+| `.agents/skills/pr-comments-resolve/references/test-failure-triage.md` | `8c66fec2e5b1a2aca37129d96affb0540a697620fbbea40e0dde27f6bb2a4ea7` | patched, `7e26298a5c3617ac81aedd669c2a9f430344626f243f6d0e256ef9c2a9155daf` |
+| `.agents/skills/pr-comments-resolve/references/bug-filing.md` | `497aa2f56141a0df6457eee65fbfba2f4604ff0bc41c804cd8acdc47eccf33bb` | patched, `af8478c3111e9bfbd33df2a48b61d2a2114d4f366e66a392904d6f7384c7127b` |
+| `.agents/skills/pr-comments-resolve/references/commit-attribution.md` | `d00569f163ff6608aca289a9fd8c7cff49a474a37bb0c85dd6d460980e93f780` | byte-identical |
+
+### Consumer-local patches
+
+The Claude body and `bug-filing.md` move Taiga project 3 to 4 and use the
+full-mode tool name `search_project` (full mode has no `search`). The
+frontmatter drops the `dotnet`, NuGet, and Microsoft Learn grants, adds this
+repository's test and lint commands, and grants the tools the bug-filing and
+triage companions already call (`scripts/taiga-comment.sh`, `list_issues`,
+`update_issue`). Both bodies replace `test-results/*.xml` with the unittest
+output, and both triage companions replace the `dotnet run` example. The Codex
+body keeps `<verified-project-id>`, which it resolves live. No numeric status
+ID appears in any installed file; statuses, types, severities, and priorities
+are resolved by name. Both `bug-filing.md` copies, both triage companions, and
+both bodies link this repository's [bug triage policy](bug-triage.md) and use
+its tags: surface `devx`, `secrets`, `taiga`, or `skills`, plus the repository
+tag `repo:dev-env-template`; `src:user` and `src:monitor` are dropped, and the
+priority list has no Urgent because project 4 has none. Unified diffs:
+
+```diff
+--- you-thon/7988416/.claude/skills/pr-comments-resolve/SKILL.md
++++ .claude/skills/pr-comments-resolve/SKILL.md
+@@ -5,25 +5,26 @@
+ allowed-tools:
+   - Bash(gh *)
+   - Bash(git *)
+-  - Bash(dotnet run *)
+-  - Bash(timeout 590 dotnet run *)
+-  - Bash(dotnet build *)
+-  - Bash(dotnet fantomas *)
++  - Bash(python3 -m unittest *)
++  - Bash(timeout 590 python3 -m unittest *)
++  - Bash(bash -n *)
++  - Bash(shellcheck *)
+   - Bash(scripts/taiga-story.sh *)
++  - Bash(scripts/taiga-comment.sh *)
+   - Read
+   - Edit
+   - Write
+   - Grep
+   - Glob
+-  - WebFetch(https://www.nuget.org/*)
+   - WebFetch(https://github.com/*)
+   - WebFetch(https://raw.githubusercontent.com/*)
+-  - WebFetch(https://learn.microsoft.com/*)
+   - mcp__taiga-py__get_user_story
+   - mcp__taiga-py__get_epic
+-  - mcp__taiga-py__search
++  - mcp__taiga-py__search_project
++  - mcp__taiga-py__list_issues
+   - mcp__taiga-py__create_user_story
+   - mcp__taiga-py__create_issue
++  - mcp__taiga-py__update_issue
+   - mcp__taiga-py__get_issue_severities
+   - mcp__taiga-py__get_issue_priorities
+   - mcp__taiga-py__get_issue_types
+@@ -181,8 +182,8 @@
+ ### For Agree
+
+ 1. Make the code change following project conventions
+-2. Run the affected test suite(s) per [docs/testing-workflow.md](../../../docs/testing-workflow.md). Run each suite or build as a foreground Bash call with the tool's `timeout: 600000` parameter set explicitly (the default is 120 s, after which the harness moves the command to the background), and wrap it in a shell `timeout 590` so it ends inside the call. Never use `run_in_background`, `Monitor`, or end your turn waiting for a task notification — this runs headless, so there is no next turn and the run dies with you. On exit 124, run a narrower target per docs/testing-workflow.md instead of a longer timeout.
+-3. Read the relevant `test-results/*.xml` to verify all tests pass
++2. Run `python3 -m unittest discover -s tests -v`, plus `bash -n` and `shellcheck` on changed Bash, per [docs/testing-workflow.md](../../../docs/testing-workflow.md). Run each suite or build as a foreground Bash call with the tool's `timeout: 600000` parameter set explicitly (the default is 120 s, after which the harness moves the command to the background), and wrap it in a shell `timeout 590` so it ends inside the call. Never use `run_in_background`, `Monitor`, or end your turn waiting for a task notification — this runs headless, so there is no next turn and the run dies with you. On exit 124, run a narrower target per docs/testing-workflow.md instead of a longer timeout.
++3. Read the unittest output to verify all tests pass (this repository has no `test-results/*.xml` files)
+ 4. **If you believe a failure is unrelated to your changes**, you MUST follow the Test Failure Triage Protocol in `.claude/skills/shared/test-failure-triage.md` before dismissing it.
+ 5. Commit with a descriptive message:
+    ```
+@@ -231,17 +232,17 @@
+
+ #### 4c. Check for duplicates
+
+-Search Taiga project 3 for existing items about the same issue:
++Search Taiga project 4 for existing items about the same issue:
+
+ ```
+-search(project_id=3, text="<key terms from the observation>")
++search_project(project_id=4, text="<key terms from the observation>")
+ ```
+
+ If a matching item already exists, skip creation and reference the existing item in your reply.
+
+ #### 4d. Create the Taiga item
+
+-**For bugs (Issues):** follow `.claude/skills/shared/bug-filing.md` with source tag `src:pr-review`. Severity and priority come from `docs/bug-triage.md`, not from a guess. Prefix the description template with:
++**For bugs (Issues):** follow `.claude/skills/shared/bug-filing.md` with source tag `src:pr-review`. Severity and priority come from [docs/bug-triage.md](../../../docs/bug-triage.md), not from a guess. Prefix the description template with:
+
+ ```
+ Discovered during PR #$ARGUMENTS review.
+@@ -254,7 +255,7 @@
+
+ ```
+ create_user_story(
+-    project_id=3,
++    project_id=4,
+     subject="<concise title>",
+     kwargs={
+         "description": "Discovered during PR #$ARGUMENTS review.\n\n**File:** `<path>`\n**Line:** <line number or range>\n\n<2-3 sentence description of the improvement and why it matters>"
+--- you-thon/7988416/.claude/skills/shared/bug-filing.md
++++ .claude/skills/shared/bug-filing.md
+@@ -1,41 +1,41 @@
+ # Bug Filing Protocol
+
+ Follow this whenever a skill or agent creates a Taiga bug. The rubric lives in
+-`docs/bug-triage.md`; this file is only the procedure for applying it at filing time.
++[docs/bug-triage.md](../../../docs/bug-triage.md); this file is only the procedure for applying it at filing time.
+
+ ## Step 1: Resolve IDs
+
+ Fetch once per session, in parallel:
+
+-- `get_issue_types(project_id=3)` — the "Bug" type ID
+-- `get_issue_statuses(project_id=3)` — the "New" status ID
+-- `get_issue_severities(project_id=3)` — Minor / Normal / Important / Critical
+-- `get_issue_priorities(project_id=3)` — Low / Normal / High / Urgent
++- `get_issue_types(project_id=4)` — the "Bug" type ID
++- `get_issue_statuses(project_id=4)` — the "New" status ID
++- `get_issue_severities(project_id=4)` — Minor / Normal / Important / Critical (Wishlist is not used for bugs)
++- `get_issue_priorities(project_id=4)` — Low / Normal / High
+
+ ## Step 2: Check for duplicates
+
+-`search(project_id=3, text="<key terms>")`. If a matching open issue exists, do not create a new
++`search_project(project_id=4, text="<key terms>")`. If a matching open issue exists, do not create a new
+ one: reference the existing ref in your output and, if you have new evidence, add it as a comment
+ via `scripts/taiga-comment.sh <id> "<evidence>" --issue`.
+
+-## Step 3: Classify per `docs/bug-triage.md`
++## Step 3: Classify per the triage policy
+
+-1. **Surface** (exactly one): `product`, `devx`, `pipeline`, `ci`.
+-2. **Source** (exactly one): `src:user`, `src:monitor`, `src:manual-test`, `src:pr-review`,
+-   `src:agent`, `src:jon`. Skills filing on their own behalf use `src:agent`; the manual-testing
+-   agent uses `src:manual-test`; PR comment resolution uses `src:pr-review`.
+-3. **Severity**: pick from the severity table for that surface. This is provisional; the triage
+-   sweep confirms it.
+-4. **Priority**: read it off the severity × surface matrix, then apply the modifiers. If you
++1. **Surface** (exactly one): `devx`, `secrets`, `taiga`, `skills`. Always add the repository
++   tag `repo:dev-env-template`; project 4 is shared with other repositories.
++2. **Source** (exactly one): `src:manual-test`, `src:pr-review`, `src:agent`, `src:jon`.
++   Skills filing on their own behalf use `src:agent`; the manual-testing agent uses
++   `src:manual-test`; PR comment resolution uses `src:pr-review`.
++3. **Severity**: pick from the severity table. Triage confirms or corrects it.
++4. **Priority**: read it off the severity matrix, then apply the modifiers. If you
+    deviate from the matrix, say why in the description.
+
+-Do not apply the `triaged` tag. Only the triage sweep sets it.
++Do not apply the `triaged` tag. Only triage sets it.
+
+ ## Step 4: Create the issue
+
+ ```
+ create_issue(
+-    project_id=3,
++    project_id=4,
+     subject="<concise title>",
+     type_id=<bug_type_id>,
+     status_id=<new_status_id>,
+@@ -43,7 +43,7 @@
+     priority_id=<id>,
+     kwargs={
+         "description": "<template below>",
+-        "tags": [["<surface>", null], ["<source>", null]]
++        "tags": [["repo:dev-env-template", null], ["<surface>", null], ["<source>", null]]
+     }
+ )
+ ```
+@@ -58,7 +58,7 @@
+ **Actual:** ...
+ **Reproduce / observed at:** ...
+ **Preliminary cause:** ...
+-**Evidence:** <links, log lines, PR, commit hash, GlitchTip issue id>
++**Evidence:** <links, log lines, PR, commit hash>
+ ```
+
+ Add any context the filing skill already requires (for example "Discovered during PR #N review"
+--- you-thon/7988416/.claude/skills/shared/test-failure-triage.md
++++ .claude/skills/shared/test-failure-triage.md
+@@ -10,7 +10,7 @@
+ git stash push -u  # stash including untracked files; note whether a stash was created
+ git checkout main  # or the appropriate base branch
+ # Run ONLY the specific failing test(s), not the full suite
+-dotnet run -- <TestTarget>  # with appropriate filter if possible
++python3 -m unittest -v tests.<module>.<Class>.<test_name>  # the failing test only
+ ```
+
+ ## Step 2: Evaluate the result
+@@ -38,9 +38,9 @@
+ 3. If no existing bug is found, file one following `.claude/skills/shared/bug-filing.md`:
+    - Subject: `Pre-existing test failure: <test name>`
+    - Description: Include the test name, test suite, error message, commit hash where verified broken, and which branch/PR discovered it
+-   - Severity per `docs/bug-triage.md`: Important if the failure is deterministic on `main` (main is red for that suite), Normal if it is flaky or environment-dependent
+-   - Priority: from the matrix (surface is `ci` unless the failure only reproduces in the local dev stack, then `devx`)
+-   - Tags: surface tag, `src:agent`, and `pre-existing-failure`
++   - Severity per [docs/bug-triage.md](../../../docs/bug-triage.md): Important if the failure is deterministic on `main` (main is red for that suite), Normal if it is flaky or environment-dependent
++   - Priority: from the matrix (surface is the area the failing test covers: `devx`, `secrets`, `taiga`, or `skills`)
++   - Tags: `repo:dev-env-template`, surface tag, `src:agent`, and `pre-existing-failure`
+ 4. Note the bug ref number
+
+ ## Step 4: Return to your branch and continue
+--- you-thon/7988416/.agents/skills/pr-comments-resolve/SKILL.md
++++ .agents/skills/pr-comments-resolve/SKILL.md
+@@ -159,8 +159,8 @@
+ ### For Agree
+
+ 1. Make the code change following project conventions
+-2. Run the affected test suite(s) per `docs/testing-workflow.md`
+-3. Read the relevant `test-results/*.xml` to verify all tests pass
++2. Run `python3 -m unittest discover -s tests -v`, plus `bash -n` and `shellcheck` on changed Bash, per `docs/testing-workflow.md`
++3. Read the unittest output to verify all tests pass (this repository has no `test-results/*.xml` files)
+ 4. **If you believe a failure is unrelated to your changes**, you MUST follow the Test Failure Triage Protocol in [test failure triage](references/test-failure-triage.md) before dismissing it.
+ 5. Commit with a descriptive message:
+    ```
+@@ -209,7 +209,7 @@
+
+ #### 4c. Check for duplicates
+
+-Search Taiga the verified You-Thon project for existing items about the same issue:
++Search the verified consumer Taiga project for existing items about the same issue:
+
+ ```
+ search(project_id=<verified-project-id>, text="<key terms from the observation>")
+@@ -219,7 +219,7 @@
+
+ #### 4d. Create the Taiga item
+
+-**For bugs (Issues):** follow [bug filing](references/bug-filing.md) with source tag `src:pr-review`. Severity and priority come from `docs/bug-triage.md`, not from a guess. Prefix the description template with:
++**For bugs (Issues):** follow [bug filing](references/bug-filing.md) with source tag `src:pr-review`. Severity and priority come from [docs/bug-triage.md](../../../docs/bug-triage.md), not from a guess. Prefix the description template with:
+
+ ```
+ Discovered during PR #<arguments> review.
+--- you-thon/7988416/.agents/skills/pr-comments-resolve/references/bug-filing.md
++++ .agents/skills/pr-comments-resolve/references/bug-filing.md
+@@ -1,7 +1,7 @@
+ # Bug Filing Protocol
+
+ Follow this whenever a skill or agent creates a Taiga bug. The rubric lives in
+-`docs/bug-triage.md`; verify the consumer project and read that policy before filing. This file is only the procedure for applying it at filing time.
++[docs/bug-triage.md](../../../../docs/bug-triage.md); verify the consumer project and read that policy before filing. This file is only the procedure for applying it at filing time.
+
+ ## Step 1: Resolve IDs
+
+@@ -9,8 +9,8 @@
+
+ - `get_issue_types(project_id=<verified-project-id>)` — the "Bug" type ID
+ - `get_issue_statuses(project_id=<verified-project-id>)` — the "New" status ID
+-- `get_issue_severities(project_id=<verified-project-id>)` — Minor / Normal / Important / Critical
+-- `get_issue_priorities(project_id=<verified-project-id>)` — Low / Normal / High / Urgent
++- `get_issue_severities(project_id=<verified-project-id>)` — Minor / Normal / Important / Critical (Wishlist is not used for bugs)
++- `get_issue_priorities(project_id=<verified-project-id>)` — Low / Normal / High
+
+ ## Step 2: Check for duplicates
+
+@@ -18,18 +18,18 @@
+ one: reference the existing ref in your output and, if you have new evidence, add it as a comment
+ via `scripts/taiga-comment.sh <id> "<evidence>" --issue`.
+
+-## Step 3: Classify per `docs/bug-triage.md`
++## Step 3: Classify per the triage policy
+
+-1. **Surface** (exactly one): `product`, `devx`, `pipeline`, `ci`.
+-2. **Source** (exactly one): `src:user`, `src:monitor`, `src:manual-test`, `src:pr-review`,
+-   `src:agent`, `src:jon`. Skills filing on their own behalf use `src:agent`; the manual-testing
+-   agent uses `src:manual-test`; PR comment resolution uses `src:pr-review`.
+-3. **Severity**: pick from the severity table for that surface. This is provisional; the triage
+-   sweep confirms it.
+-4. **Priority**: read it off the severity × surface matrix, then apply the modifiers. If you
++1. **Surface** (exactly one): `devx`, `secrets`, `taiga`, `skills`. Always add the repository
++   tag `repo:dev-env-template`; project 4 is shared with other repositories.
++2. **Source** (exactly one): `src:manual-test`, `src:pr-review`, `src:agent`, `src:jon`.
++   Skills filing on their own behalf use `src:agent`; the manual-testing agent uses
++   `src:manual-test`; PR comment resolution uses `src:pr-review`.
++3. **Severity**: pick from the severity table. Triage confirms or corrects it.
++4. **Priority**: read it off the severity matrix, then apply the modifiers. If you
+    deviate from the matrix, say why in the description.
+
+-Do not apply the `triaged` tag. Only the triage sweep sets it.
++Do not apply the `triaged` tag. Only triage sets it.
+
+ ## Step 4: Create the issue
+
+@@ -43,7 +43,7 @@
+     priority_id=<id>,
+     kwargs={
+         "description": "<template below>",
+-        "tags": [["<surface>", null], ["<source>", null]]
++        "tags": [["repo:dev-env-template", null], ["<surface>", null], ["<source>", null]]
+     }
+ )
+ ```
+@@ -58,7 +58,7 @@
+ **Actual:** ...
+ **Reproduce / observed at:** ...
+ **Preliminary cause:** ...
+-**Evidence:** <links, log lines, PR, commit hash, GlitchTip issue id>
++**Evidence:** <links, log lines, PR, commit hash>
+ ```
+
+ Add any context the filing skill already requires (for example "Discovered during PR #N review"
+--- you-thon/7988416/.agents/skills/pr-comments-resolve/references/test-failure-triage.md
++++ .agents/skills/pr-comments-resolve/references/test-failure-triage.md
+@@ -10,7 +10,7 @@
+ git stash push -u  # stash including untracked files; note whether a stash was created
+ git checkout main  # or the appropriate base branch
+ # Run ONLY the specific failing test(s), not the full suite
+-dotnet run -- <TestTarget>  # with appropriate filter if possible
++python3 -m unittest -v tests.<module>.<Class>.<test_name>  # the failing test only
+ ```
+
+ ## Step 2: Evaluate the result
+@@ -38,9 +38,9 @@
+ 3. If no existing bug is found, file one following [bug filing](bug-filing.md):
+    - Subject: `Pre-existing test failure: <test name>`
+    - Description: Include the test name, test suite, error message, commit hash where verified broken, and which branch/PR discovered it
+-   - Severity per `docs/bug-triage.md`: Important if the failure is deterministic on `main` (main is red for that suite), Normal if it is flaky or environment-dependent
+-   - Priority: from the matrix (surface is `ci` unless the failure only reproduces in the local dev stack, then `devx`)
+-   - Tags: surface tag, `src:agent`, and `pre-existing-failure`
++   - Severity per [docs/bug-triage.md](../../../../docs/bug-triage.md): Important if the failure is deterministic on `main` (main is red for that suite), Normal if it is flaky or environment-dependent
++   - Priority: from the matrix (surface is the area the failing test covers: `devx`, `secrets`, `taiga`, or `skills`)
++   - Tags: `repo:dev-env-template`, surface tag, `src:agent`, and `pre-existing-failure`
+ 4. Note the bug ref number
+
+ ## Step 4: Return to your branch and continue
+```
+
+### Bug triage policy
+
+[docs/bug-triage.md](bug-triage.md) is a short adaptation of you-thon
+`docs/bug-triage.md` at `7988416182ad5b84b7899f83bb8ccf7db5eca955` (source
+SHA-256 `f5b1b48c39a3216537d4b64e8d6c216575125d59b24e53207324c937ab1faf7f`).
+It keeps the source's severity/priority split, override-with-comment rule,
+tag model, description template, and duplicate and claim rules, and rewrites
+severity and surfaces around this repository. Field values were read live from
+project 4 and are named, never numbered; project 4 has no Urgent priority and
+no Spike type. You-Thon production intake, monitoring sources, the launch
+blocker modifier, the scheduled sweep and fix orchestrators, and links to docs
+that do not exist here are dropped.
+
+### Deliberately left out
+
+- `/pr-converse`: named only as the redirect for issue comments and review
+  bodies. The SAASDK copy is already installed and is not replaced.
+- `/code-review`: a Claude Code built-in mentioned only as a source of issue
+  comments; nothing to install.
+
+### Known limits
+
+- No triage skill is installed; `docs/bug-triage.md` describes the triage
+  steps for Jon or an agent asked to run them.
+- The skill's Taiga and GitHub write paths (thread replies, resolution, issue
+  and story creation) were not exercised by this install.

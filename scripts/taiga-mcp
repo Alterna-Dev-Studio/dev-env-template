@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Launch the local Taiga MCP server with SOPS credentials from one scope.
+"""Launch the local Taiga MCP server with Taiga credentials.
+
+TAIGA_API_URL, TAIGA_USERNAME, and TAIGA_PASSWORD are taken from the environment
+when all three are set and no scope is named; otherwise they are decrypted from
+the given SOPS scope (default: profile).
 
 The pytaiga-mcp checkout defaults to ~/work/utils/pytaiga-mcp; set
 PYTAIGA_MCP_HOME to use another location. scripts/setup-taiga-mcp creates it.
@@ -12,8 +16,9 @@ import sys
 
 def main():
     if len(sys.argv) not in (2, 3) or sys.argv[1] not in ("workflow", "full"):
-        raise RuntimeError("usage: taiga-mcp workflow|full [profile|project/NAME]")
-    scope = sys.argv[2] if len(sys.argv) == 3 else "profile"
+        raise RuntimeError("usage: taiga-mcp workflow|full [profile|project/NAME]"
+                           " (TAIGA_* from the environment are used when no scope is named)")
+    scope = sys.argv[2] if len(sys.argv) == 3 else None
 
     root = Path(__file__).resolve().parent.parent
     server_root = Path(os.environ.get("PYTAIGA_MCP_HOME") or Path.home() / "work/utils/pytaiga-mcp")
@@ -22,19 +27,25 @@ def main():
     if not python.is_file() or not server.is_file():
         raise RuntimeError(f"Install pytaiga-mcp and its virtual environment at {server_root} (run scripts/setup-taiga-mcp)")
 
-    profile = runpy.run_path(str(root / "scripts/envtool"))["decrypt"](scope)
     required = ("TAIGA_API_URL", "TAIGA_USERNAME", "TAIGA_PASSWORD")
-    missing = [name for name in required if not profile.get(name)]
-    if missing:
-        raise RuntimeError(f"Missing encrypted Taiga settings in {scope}: " + ", ".join(missing))
-
-    # The checkout has a legacy .env. Explicit environment values take precedence
-    # over it, including empty values for Pangolin settings absent from SOPS.
-    names = required + (
+    pangolin_names = (
         "PANGOLIN_RESOURCE_TOKEN", "PANGOLIN_ACCESS_TOKEN_ID",
         "PANGOLIN_ACCESS_TOKEN", "PANGOLIN_SESSION_REQUEST_PARAM",
     )
-    for name in names:
+    if scope is None and all(os.environ.get(name) for name in required):
+        profile = {name: os.environ[name] for name in required}
+        for name in pangolin_names:
+            profile[name] = os.environ.get(name, "")
+    else:
+        profile = runpy.run_path(str(root / "scripts/envtool"))["decrypt"](scope or "profile")
+        missing = [name for name in required if not profile.get(name)]
+        if missing:
+            raise RuntimeError(f"Missing Taiga settings: set {', '.join(missing)} in the environment"
+                               f" or in vault scope {scope or 'profile'}")
+
+    # The checkout has a legacy .env. Explicit environment values take precedence
+    # over it, including empty values for Pangolin settings absent from SOPS.
+    for name in required + pangolin_names:
         os.environ[name] = profile.get(name, "")
     os.environ["TAIGA_TRANSPORT"] = "stdio"
     os.chdir(server_root)

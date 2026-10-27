@@ -8,9 +8,13 @@ fi
 if [[ ${_DEV_ENV_PROFILE_LOADED-} != "$_dev_env_root" ]]; then
   if _dev_env_exports="$("$_dev_env_root/scripts/envtool" export profile)"; then
     eval "$_dev_env_exports"
+    # The profile may assign any variable name, so derive the root again.
+    _dev_env_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
     _DEV_ENV_PROFILE_LOADED=$_dev_env_root
   else
     printf 'dev-env: could not load encrypted profile\n' >&2
   fi
 fi
+# Set after the profile so a stored DEV_ENV_HOME cannot redirect it.
+export DEV_ENV_HOME="$_dev_env_root"
 unset _dev_env_root _dev_env_exports
