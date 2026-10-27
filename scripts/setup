@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Initialize SOPS and install the shared profile in Bash."""
 import argparse
-import getpass
 import os
 from pathlib import Path
 import re
@@ -15,20 +14,8 @@ ROOT = Path(__file__).resolve().parent.parent
 tool = runpy.run_path(str(ROOT / "scripts/envtool"))
 
 
-def load_shared(path=ROOT / "shared-variables.txt"):
-    """Return the variable names listed one per line; '#' comments and blank lines are ignored."""
-    names = []
-    for line in path.read_text().splitlines():
-        line = line.split("#", 1)[0].strip()
-        if line:
-            if not re.fullmatch(r"[A-Z_][A-Z0-9_]*", line):
-                raise RuntimeError(f"{path.name}: invalid variable name {line!r}")
-            names.append(line)
-    if not names:
-        raise RuntimeError(f"{path.name} lists no variable names")
-    return tuple(names)
-
-
+# The repository's own Taiga helpers and MCP launcher cannot run without these.
+REQUIRED = ("TAIGA_API_URL", "TAIGA_USERNAME", "TAIGA_PASSWORD")
 SOURCE = f"[ -f {shlex.quote(str(ROOT / 'profile.sh'))} ] && source {shlex.quote(str(ROOT / 'profile.sh'))}\n"
 BASHRC = Path.home() / ".bashrc"
 LOGINRC = next((Path.home() / name for name in (".bash_profile", ".bash_login")
@@ -39,11 +26,11 @@ COMMENT = "# Shared development tooling environment (managed by dev-env setup).\
 DIRENV = ["# Keep direnv last (managed by dev-env setup).\n", 'eval "$(direnv hook bash)"\n']
 
 
-def rewrite_bashrc(remove_existing):
+def rewrite_bashrc(remove_names=()):
     old = BASHRC.read_text() if BASHRC.exists() else ""
     lines = old.splitlines(keepends=True)
-    if remove_existing:
-        pattern = re.compile(r"^\s*export (?:" + "|".join(SHARED) + r")=")
+    if remove_names:
+        pattern = re.compile(r"^\s*export (?:" + "|".join(remove_names) + r")=")
         lines = [line for line in lines if not pattern.match(line)]
     lines = [line for line in lines if "source " + shlex.quote(str(ROOT / "profile.sh")) not in line
              and line != COMMENT]
@@ -89,54 +76,45 @@ def rewrite_loginrc():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--migrate-bashrc", action="store_true",
-                        help="encrypt current shared exports, then remove plaintext exports")
-    parser.add_argument("--add-keys", action="store_true",
-                        help="prompt for shared credentials with hidden input")
+    parser.add_argument("--migrate-bashrc", nargs="+", metavar="NAME", default=[],
+                        help="encrypt these exports from the current shell, then remove them from ~/.bashrc")
     args = parser.parse_args()
-    if args.add_keys and not sys.stdin.isatty():
-        raise RuntimeError("--add-keys requires an interactive terminal")
+    for name in args.migrate_bashrc:
+        if not re.fullmatch(r"[A-Z_][A-Z0-9_]*", name):
+            raise RuntimeError(f"invalid variable name {name!r}")
     tool["initialize"]()
-    if args.add_keys:
-        profile = tool["decrypt"]("profile")
-        print("Enter shared tool values; leave blank to keep an existing value or skip.")
-        updated = []
-        for name in SHARED:
-            value = getpass.getpass(f"{name}: ")
-            if value:
-                profile[name] = value
-                updated.append(name)
-        if updated:
-            tool["encrypt"]("profile", profile)
-            check = tool["decrypt"]("profile")
-            if any(check[name] != profile[name] for name in updated):
-                raise RuntimeError("Encrypted profile verification failed")
-            print(f"Saved {len(updated)} shared values.")
     if args.migrate_bashrc:
-        existing = BASHRC.read_text()
-        present = [name for name in SHARED if re.search(rf"(?m)^\s*export {name}=", existing)]
-        missing = [name for name in present if name not in os.environ]
+        existing = BASHRC.read_text() if BASHRC.exists() else ""
+        absent = [name for name in args.migrate_bashrc
+                  if not re.search(rf"(?m)^\s*export {name}=", existing)]
+        if absent:
+            raise RuntimeError("~/.bashrc does not export: " + ", ".join(absent))
+        missing = [name for name in args.migrate_bashrc if name not in os.environ]
         if missing:
             raise RuntimeError("Current shell lacks these .bashrc variables: " + ", ".join(missing))
         profile = tool["decrypt"]("profile")
-        profile.update({name: os.environ[name] for name in present})
+        profile.update({name: os.environ[name] for name in args.migrate_bashrc})
         tool["encrypt"]("profile", profile)
         check = tool["decrypt"]("profile")
-        if any(check[name] != os.environ[name] for name in present):
+        if any(check[name] != os.environ[name] for name in args.migrate_bashrc):
             raise RuntimeError("Encrypted profile verification failed; .bashrc was not changed")
-        rewrite_bashrc(True)
+        rewrite_bashrc(args.migrate_bashrc)
         rewrite_loginrc()
-        print(f"Migrated {len(present)} shared variables and updated ~/.bashrc and {LOGINRC}.")
+        print(f"Migrated {len(args.migrate_bashrc)} variables and updated ~/.bashrc and {LOGINRC}.")
     else:
-        rewrite_bashrc(False)
+        rewrite_bashrc()
         rewrite_loginrc()
         print(f"Updated ~/.bashrc and {LOGINRC} to source the development profile.")
+    stored = tool["decrypt"]("profile")
+    missing = [name for name in REQUIRED if not stored.get(name)]
+    if missing:
+        print("Missing required profile values: " + ", ".join(missing)
+              + ". Add each with ./scripts/envtool set profile NAME.")
 
 
 if __name__ == "__main__":
     try:
-        SHARED = load_shared()
         main()
     except (RuntimeError, OSError) as error:
-        print(f"setup: {error}", file=__import__("sys").stderr)
+        print(f"setup: {error}", file=sys.stderr)
         raise SystemExit(1)

@@ -25,7 +25,6 @@ class ScriptTests(unittest.TestCase):
         for name in ("envtool", "setup", "taiga-mcp"):
             shutil.copy2(ROOT / "scripts" / name, self.repo / "scripts" / name)
         shutil.copy2(ROOT / "profile.sh", self.repo / "profile.sh")
-        shutil.copy2(ROOT / "shared-variables.txt", self.repo / "shared-variables.txt")
         shutil.copytree(ROOT / "shell", self.repo / "shell")
         self.env = {key: value for key, value in os.environ.items()
                     if not key.startswith(("SOPS_", "XDG_CONFIG_HOME", "TAIGA_"))}
@@ -166,21 +165,29 @@ class ScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("usage:", result.stderr)
 
-    def test_migrate_bashrc_uses_shared_variables_file(self):
-        (self.repo / "shared-variables.txt").write_text("# names\nFOO\n\nBAR # trailing\n")
+    def test_migrate_bashrc_moves_only_named_exports(self):
         self.bashrc.write_text("export FOO=1\nexport BAR=2\nexport BAZ=3\n")
         self.env.update({"FOO": "1", "BAR": "2", "BAZ": "3"})
         self.run_script("setup")
-        self.run_script("setup", "--migrate-bashrc")
+        self.run_script("setup", "--migrate-bashrc", "FOO", "BAR")
         self.assertEqual(self.run_script("envtool", "list", "profile").stdout.split(), ["BAR", "FOO"])
         bashrc = self.bashrc.read_text()
         self.assertNotIn("export FOO=", bashrc)
         self.assertNotIn("export BAR=", bashrc)
         self.assertIn("export BAZ=3", bashrc)
-        (self.repo / "shared-variables.txt").write_text("FOO\nnot-a-name\n")
-        result = self.run_script("setup", check=False)
+        result = self.run_script("setup", "--migrate-bashrc", "not-a-name", check=False)
         self.assertEqual(result.returncode, 1)
-        self.assertIn("shared-variables.txt", result.stderr)
+        self.assertIn("invalid variable name", result.stderr)
+
+    def test_setup_names_missing_required_taiga_settings(self):
+        result = self.run_script("setup")
+        self.assertIn("Missing required profile values: TAIGA_API_URL, TAIGA_USERNAME, TAIGA_PASSWORD",
+                      result.stdout)
+        self.store("profile", {"TAIGA_API_URL": "https://taiga.example", "TAIGA_USERNAME": "u",
+                               "TAIGA_PASSWORD": "secret-value"})
+        result = self.run_script("setup")
+        self.assertNotIn("Missing required", result.stdout)
+        self.assertNotIn("secret-value", result.stdout + result.stderr)
 
     def test_profile_exports_values_in_bash(self):
         self.run_script("setup")
