@@ -20,11 +20,18 @@ KEY_FILE = Path(os.environ.get("SOPS_AGE_KEY_FILE")
 CONFIG = ROOT / ".sops.yaml"
 NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 SCOPE = re.compile(r"^(profile|project/[A-Za-z0-9_-]+)$")
+SCOPE_HELP = "profile or project/<name>"
+
+
+def locate(name):
+    """Path of a tool on PATH or in ~/go/bin, or None when it is not installed."""
+    found = shutil.which(name) or str(Path.home() / "go/bin" / name)
+    return found if Path(found).is_file() else None
 
 
 def binary(name):
-    found = shutil.which(name) or str(Path.home() / "go/bin" / name)
-    if not Path(found).is_file():
+    found = locate(name)
+    if found is None:
         raise RuntimeError(f"{name} is required; see README.md")
     return found
 
@@ -127,13 +134,18 @@ def initialize():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("init")
-    for command in ("export", "list", "edit"):
-        sub.add_parser(command).add_argument("scope")
-    setting = sub.add_parser("set")
-    setting.add_argument("scope")
-    setting.add_argument("name")
+    sub = parser.add_subparsers(dest="command", required=True, metavar="COMMAND")
+    init_text = "create the age identity, .sops.yaml, and an empty profile (called by setup)"
+    sub.add_parser("init", help=init_text, description=init_text)
+    for command, text in (("export", "print `export NAME=value` lines for a scope "
+                                     "(used by profile.sh and .envrc)"),
+                          ("list", "print the variable names stored in a scope, never the values"),
+                          ("edit", "open the decrypted scope as JSON in $EDITOR via sops")):
+        sub.add_parser(command, help=text, description=text).add_argument("scope", help=SCOPE_HELP)
+    set_text = "store one variable in a scope; the value is read with hidden input"
+    setting = sub.add_parser("set", help=set_text, description=set_text)
+    setting.add_argument("scope", help=SCOPE_HELP)
+    setting.add_argument("name", help="environment variable name, e.g. TAIGA_PASSWORD")
     args = parser.parse_args()
     if args.command == "init":
         initialize()

@@ -205,5 +205,42 @@ class ScriptTests(unittest.TestCase):
         self.assertEqual(result.stdout, str(self.repo))
 
 
+class HelpAndPreflightTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.home = self.tmp / "home"
+        self.home.mkdir()
+        bin_dir = self.tmp / "bin"
+        bin_dir.mkdir()
+        (bin_dir / "python3").symlink_to(shutil.which("python3"))
+        self.env = {k: v for k, v in os.environ.items()
+                    if not k.startswith(("SOPS_", "XDG_", "TAIGA_"))}
+        self.env.update(HOME=str(self.home), PATH=str(bin_dir))
+
+    def run_script(self, *args):
+        return subprocess.run([str(ROOT / "scripts" / args[0]), *args[1:]], env=self.env,
+                              stdin=subprocess.DEVNULL, text=True, capture_output=True)
+
+    def test_envtool_help_describes_every_subcommand(self):
+        result = self.run_script("envtool", "--help")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for command in ("init", "export", "list", "edit", "set"):
+            self.assertIn(command, result.stdout)
+        self.assertIn("called by setup", result.stdout)
+
+    def test_envtool_subcommand_help_documents_scope(self):
+        for command in ("export", "list", "edit", "set"):
+            result = self.run_script("envtool", command, "--help")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("profile or project/<name>", result.stdout)
+        self.assertIn("hidden", self.run_script("envtool", "set", "--help").stdout)
+
+    def test_envtool_init_help_says_called_by_setup(self):
+        result = self.run_script("envtool", "init", "--help")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("called by setup", result.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()
