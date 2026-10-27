@@ -23,7 +23,7 @@ class ScriptTests(unittest.TestCase):
         self.home.mkdir()
         self.repo = self.tmp / "repo"
         (self.repo / "scripts").mkdir(parents=True)
-        for name in ("envtool", "setup", "taiga-mcp"):
+        for name in ("envtool", "setup", "setup-taiga-mcp", "taiga-mcp"):
             shutil.copy2(ROOT / "scripts" / name, self.repo / "scripts" / name)
         shutil.copy2(ROOT / "profile.sh", self.repo / "profile.sh")
         shutil.copy2(ROOT / ".envrc", self.repo / ".envrc")
@@ -251,6 +251,36 @@ class ScriptTests(unittest.TestCase):
         result = subprocess.run(["bash", "-c", f'source {self.repo}/profile.sh; printf %s "$_DEV_ENV_PROFILE_LOADED"'],
                                 env=self.env, text=True, capture_output=True, check=True)
         self.assertEqual(result.stdout, str(self.repo))
+
+    def test_setup_taiga_mcp_registers_launcher_for_codex(self):
+        checkout = self.tmp / "pytaiga-mcp"
+        (checkout / "src").mkdir(parents=True)
+        for name in ("pyproject.toml", "uv.lock", "src/server_workflow.py", "src/server_full.py"):
+            (checkout / name).touch()
+        shims = self.home / "bin"
+        shims.mkdir()
+        for name, log in (("uv", "UV_LOG"), ("codex", "CODEX_LOG")):
+            shim = shims / name
+            shim.write_text(f"#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"${log}\"\n")
+            shim.chmod(0o755)
+        uv_log, codex_log = self.tmp / "uv.log", self.tmp / "codex.log"
+        self.env.update(PYTAIGA_MCP_HOME=str(checkout), UV_LOG=str(uv_log), CODEX_LOG=str(codex_log),
+                        PATH=f"{shims}:{os.environ['PATH']}")
+        launcher = self.repo / "scripts/taiga-mcp"
+        entry = f"mcp add taiga-py -- {launcher} full"
+
+        result = self.run_script("setup-taiga-mcp")
+        self.assertEqual(uv_log.read_text(), f"sync --frozen --directory {checkout}\n")
+        self.assertEqual(codex_log.read_text(), entry + "\n")
+        self.assertIn("Registered taiga-py for Codex", result.stdout)
+
+        self.run_script("setup-taiga-mcp")
+        self.assertEqual(codex_log.read_text(), (entry + "\n") * 2)
+
+        (shims / "codex").unlink()
+        self.env["PATH"] = f"{shims}:/usr/bin:/bin"
+        result = self.run_script("setup-taiga-mcp")
+        self.assertIn("codex is not on PATH", result.stdout)
 
 
 class HelpAndPreflightTests(unittest.TestCase):
