@@ -1,8 +1,8 @@
 # SAASDK native skill install
 
 Status: installed on branch `feat/saasdk-native-skills` from consumer main `11f08cb`
-(2026-10-27). This supersedes the two Codex packages installed by the S09 pilot
-(dev-env-template PR #3), which were copied from older SAASDK revisions.
+(2026-10-27). This supersedes the two Codex packages installed by the S09 pilot, which
+were copied from older SAASDK revisions.
 
 ## Sources
 
