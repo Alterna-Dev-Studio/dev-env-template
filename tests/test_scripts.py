@@ -25,6 +25,7 @@ class ScriptTests(unittest.TestCase):
         for name in ("envtool", "setup", "taiga-mcp"):
             shutil.copy2(ROOT / "scripts" / name, self.repo / "scripts" / name)
         shutil.copy2(ROOT / "profile.sh", self.repo / "profile.sh")
+        shutil.copy2(ROOT / "shared-variables.txt", self.repo / "shared-variables.txt")
         shutil.copytree(ROOT / "shell", self.repo / "shell")
         self.env = {key: value for key, value in os.environ.items()
                     if not key.startswith(("SOPS_", "XDG_CONFIG_HOME"))}
@@ -152,6 +153,22 @@ class ScriptTests(unittest.TestCase):
         result = self.run_script("taiga-mcp", check=False)
         self.assertEqual(result.returncode, 1)
         self.assertIn("usage:", result.stderr)
+
+    def test_migrate_bashrc_uses_shared_variables_file(self):
+        (self.repo / "shared-variables.txt").write_text("# names\nFOO\n\nBAR # trailing\n")
+        self.bashrc.write_text("export FOO=1\nexport BAR=2\nexport BAZ=3\n")
+        self.env.update({"FOO": "1", "BAR": "2", "BAZ": "3"})
+        self.run_script("setup")
+        self.run_script("setup", "--migrate-bashrc")
+        self.assertEqual(self.run_script("envtool", "list", "profile").stdout.split(), ["BAR", "FOO"])
+        bashrc = self.bashrc.read_text()
+        self.assertNotIn("export FOO=", bashrc)
+        self.assertNotIn("export BAR=", bashrc)
+        self.assertIn("export BAZ=3", bashrc)
+        (self.repo / "shared-variables.txt").write_text("FOO\nnot-a-name\n")
+        result = self.run_script("setup", check=False)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("shared-variables.txt", result.stderr)
 
     def test_profile_exports_values_in_bash(self):
         self.run_script("setup")

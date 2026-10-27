@@ -13,11 +13,22 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parent.parent
 tool = runpy.run_path(str(ROOT / "scripts/envtool"))
-SHARED = (
-    "TAIGA_API_URL", "TAIGA_HOST", "TAIGA_USERNAME", "TAIGA_PASSWORD",
-    "GH_TOKEN", "GH_TOKEN_FOR_PACKAGES", "GH_TOKEN_FOR_CHECKS",
-    "OPENROUTER_API_KEY",
-)
+
+
+def load_shared(path=ROOT / "shared-variables.txt"):
+    """Return the variable names listed one per line; '#' comments and blank lines are ignored."""
+    names = []
+    for line in path.read_text().splitlines():
+        line = line.split("#", 1)[0].strip()
+        if line:
+            if not re.fullmatch(r"[A-Z_][A-Z0-9_]*", line):
+                raise RuntimeError(f"{path.name}: invalid variable name {line!r}")
+            names.append(line)
+    if not names:
+        raise RuntimeError(f"{path.name} lists no variable names")
+    return tuple(names)
+
+
 SOURCE = f"[ -f {shlex.quote(str(ROOT / 'profile.sh'))} ] && source {shlex.quote(str(ROOT / 'profile.sh'))}\n"
 BASHRC = Path.home() / ".bashrc"
 LOGINRC = next((Path.home() / name for name in (".bash_profile", ".bash_login")
@@ -124,6 +135,7 @@ def main():
 
 if __name__ == "__main__":
     try:
+        SHARED = load_shared()
         main()
     except (RuntimeError, OSError) as error:
         print(f"setup: {error}", file=__import__("sys").stderr)

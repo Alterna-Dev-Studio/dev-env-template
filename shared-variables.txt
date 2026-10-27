@@ -1,0 +1,10 @@
+# Variable names scripts/setup prompts for (--add-keys) and migrates (--migrate-bashrc).
+# One name per line. Edit to match your own tools.
+TAIGA_API_URL
+TAIGA_HOST
+TAIGA_USERNAME
+TAIGA_PASSWORD
+GH_TOKEN
+GH_TOKEN_FOR_PACKAGES
+GH_TOKEN_FOR_CHECKS
+OPENROUTER_API_KEY
