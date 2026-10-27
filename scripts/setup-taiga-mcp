@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Install the local pytaiga-mcp checkout used by scripts/taiga-mcp.
+# Override the location with PYTAIGA_MCP_HOME (the launcher reads the same variable).
+set -euo pipefail
+
+checkout="${PYTAIGA_MCP_HOME:-${HOME}/work/utils/pytaiga-mcp}"
+repository="https://github.com/Alterna-Dev-Studio/pytaiga-mcp.git"
+
+if ! command -v git >/dev/null; then
+    echo "setup-taiga-mcp: git is required" >&2
+    exit 1
+fi
+if ! command -v uv >/dev/null; then
+    echo "setup-taiga-mcp: uv is required" >&2
+    exit 1
+fi
+
+if [ ! -e "$checkout" ]; then
+    mkdir -p "$(dirname "$checkout")"
+    git clone "$repository" "$checkout"
+elif [ ! -f "$checkout/pyproject.toml" ] || [ ! -f "$checkout/uv.lock" ] ||
+     [ ! -f "$checkout/src/server_workflow.py" ] || [ ! -f "$checkout/src/server_full.py" ]; then
+    echo "setup-taiga-mcp: $checkout is not a pytaiga-mcp checkout" >&2
+    exit 1
+fi
+
+uv sync --frozen --directory "$checkout"
+echo "Taiga MCP stdio checkout ready at $checkout"

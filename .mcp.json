@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "taiga-py": {
+      "type": "stdio",
+      "command": "scripts/taiga-mcp",
+      "args": ["full"]
+    }
+  }
+}

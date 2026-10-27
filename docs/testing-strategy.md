@@ -1,10 +1,9 @@
-# Dev-env template test mapping for the S09 skill pilot
+# Dev-env template test strategy
 
-This is the consumer mapping for a bounded `$review-tests` run on the
-portable-profile change. The [README](../README.md) supplies the test command
+This is the consumer test mapping that `analyze-story` and `review-tests`
+rely on. The [README](../README.md) supplies the test command
 and the requirement that tests use a temporary home without touching personal
-keys or the vault. The test files on this branch supply the suite boundaries
-below; `tests/test_shell.py` was added by the portable-profile PR.
+keys or the vault. The test files supply the suite boundaries below.
 This mapping does not import You-Thon's application test policy.
 
 | Change | Authoritative test location | Evidence |

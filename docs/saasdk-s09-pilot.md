@@ -1,5 +1,7 @@
 # S09 native skill pilot for dev-env epic #2466
 
+> Superseded: the packages below were refreshed from SAASDK main and joined by three more skills in [saasdk-install.md](saasdk-install.md).
+
 ## Scope and revisions
 
 - Consumer: `Alterna-Dev-Studio/dev-env-template`, isolated worktree at

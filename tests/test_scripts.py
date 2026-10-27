@@ -22,7 +22,7 @@ class ScriptTests(unittest.TestCase):
         self.home.mkdir()
         self.repo = self.tmp / "repo"
         (self.repo / "scripts").mkdir(parents=True)
-        for name in ("envtool", "setup"):
+        for name in ("envtool", "setup", "taiga-mcp"):
             shutil.copy2(ROOT / "scripts" / name, self.repo / "scripts" / name)
         shutil.copy2(ROOT / "profile.sh", self.repo / "profile.sh")
         shutil.copytree(ROOT / "shell", self.repo / "shell")
@@ -125,6 +125,33 @@ class ScriptTests(unittest.TestCase):
         self.store("profile", {"FOO": "bar"})
         self.assertEqual(self.run_script("envtool", "export", "profile").stdout,
                          "export FOO=bar\n")
+
+    def test_taiga_mcp_launches_checkout_with_decrypted_credentials(self):
+        self.run_script("setup")
+        self.store("profile", {"TAIGA_API_URL": "https://taiga.example", "TAIGA_USERNAME": "u",
+                               "TAIGA_PASSWORD": "p"})
+        checkout = self.tmp / "pytaiga-mcp"
+        (checkout / ".venv/bin").mkdir(parents=True)
+        (checkout / ".venv/bin/python").symlink_to(shutil.which("python3"))
+        (checkout / "src").mkdir()
+        (checkout / "src/server_full.py").write_text(
+            "import os, sys; print(os.getcwd()); "
+            "print(*(os.environ.get(n) for n in ('TAIGA_API_URL', 'TAIGA_USERNAME', 'TAIGA_PASSWORD', "
+            "'TAIGA_TRANSPORT', 'PANGOLIN_RESOURCE_TOKEN')), sep='|')\n")
+        self.env["PYTAIGA_MCP_HOME"] = str(checkout)
+        self.env["PANGOLIN_RESOURCE_TOKEN"] = "stale-host-value"
+        result = self.run_script("taiga-mcp", "full")
+        self.assertEqual(result.stdout.splitlines(),
+                         [str(checkout), "https://taiga.example|u|p|stdio|"])
+        self.assertEqual(result.stderr, "")
+        self.env["PYTAIGA_MCP_HOME"] = str(self.tmp / "absent")
+        result = self.run_script("taiga-mcp", "full", check=False)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("run scripts/setup-taiga-mcp", result.stderr)
+        self.assertNotIn("p", result.stdout)
+        result = self.run_script("taiga-mcp", check=False)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("usage:", result.stderr)
 
     def test_profile_exports_values_in_bash(self):
         self.run_script("setup")

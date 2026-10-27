@@ -5,9 +5,11 @@ description: Address feedback and suggestions on a GitHub PR — thoughtfully, n
 
 # Codex runtime and consumer scope
 
-Invoke as `$pr-converse <PR-number>`. Treat the invocation text as `<arguments>` below. This package preserves the selected You-Thon Claude workflow. Read the target consumer's `AGENTS.md` and applicable `CLAUDE.md`, then verify its project, scripts, documentation, GitHub repository, and status names before acting. You-Thon paths and commands are consumer-owned examples, not files bundled with this package. If a required helper or equivalent operation is absent, stop with the missing dependency; do not invent a replacement.
+Invoke as `$pr-converse <PR-number>`. Treat the invocation text as `<arguments>` below. A gather-and-assess-only invocation ends after Step 3; it must not check out a branch, pull, edit, run tests, push, or post replies. This package preserves the selected You-Thon Claude workflow. Read the target consumer's `AGENTS.md` and applicable `CLAUDE.md`, then verify its project, scripts, documentation, GitHub repository, and status names before acting. You-Thon paths and commands are consumer-owned examples, not files bundled with this package. If the consumer has no verified mapping for a later edit, test, reply, or tracker operation, stop before that operation and report the missing mapping. Do not invent a replacement.
 
 Discover connected Taiga tools by semantic operation before use. Verify host and project identity, resolve `<verified-project-id>` live, and resolve status/member IDs immediately before mutation. Use Codex shell, repository search/read/edit, and web tools for the corresponding Claude tool functions under current permissions. Track checklist items in the conversation or an authorized local file. Subagent work uses Codex collaboration workers with explicit file ownership and the active agent limit. Do not invoke Claude agent roles or CLI as a substitute. Preserve each stop and verification condition below.
+
+For PR reads, first check that this execution context can reach GitHub with the intended account and repository (`gh auth status`, then a read of the numbered PR), or use an available connected GitHub read tool that returns the repository identity and exact `headRefOid`. On connection, DNS, or API transport failure, retry the read at most twice with short delays; do not retry an authorization denial as though it were transient. Do not infer network access from the host shell when this skill runs inside a read-only Codex sandbox. A host-side, authenticated exact-head check may supply a pinned snapshot for offline assessment if its repository, PR number, SHA, capture time, and source are recorded, but it does not prove the head is still current in this execution context. If no live read succeeds, label the result **blocked: live PR head unavailable** (or **offline evidence only** when a pinned snapshot exists); do not call the recorded/local SHA the current head, make a final feedback disposition, edit, or publish. Do not change the sandbox or guess at a network toggle to bypass this check.
 
 # PR Converse — PR #<arguments>
 
@@ -17,15 +19,17 @@ Address review feedback on a pull request. Every comment deserves genuine consid
 
 Fetch everything about the PR in parallel:
 
-1. PR details: `gh pr view <arguments> --json title,body,baseRefName,headRefName,state,author,url`
+1. PR details: `gh pr view <arguments> --json title,body,baseRefName,headRefName,headRefOid,state,author,url`
 2. Review comments: `gh api repos/{owner}/{repo}/pulls/<arguments>/reviews --paginate`
 3. Inline comments: `gh api repos/{owner}/{repo}/pulls/<arguments>/comments --paginate`
 4. General PR comments: `gh api repos/{owner}/{repo}/issues/<arguments>/comments --paginate`
-5. Check that we're on the PR's branch: `git branch --show-current` — if not, `git checkout <head-branch> && git pull`
+5. Record the local branch and commit without changing them: `git branch --show-current` and `git rev-parse HEAD`. Compare the local commit with the PR's `headRefOid`; a different branch name at the same commit is acceptable for gathering feedback. Report a missing or mismatched local head explicitly. Read local files as PR-head evidence only when the local commit matches the recorded `headRefOid`; otherwise use GitHub's PR diff and files.
 
 Determine {owner}/{repo} from `gh repo view --json nameWithOwner -q .nameWithOwner`.
 
 If the PR is closed or merged, inform Jon and stop.
+
+Steps 1–3 are read-only. Do not check out, fetch, pull, or otherwise change the worktree while gathering and assessing feedback. If the PR head cannot be verified live from GitHub in this execution context, report that limitation and stop before any final disposition, edit, or reply. A recorded SHA or same-named local branch is not a live verification.
 
 ## Step 2: Categorize the feedback
 
@@ -56,6 +60,8 @@ Don't evaluate a suggestion in isolation. Read:
 
 ### 3c. Form your own assessment
 
+After reading the PR diff, comments, and referenced files, re-read `headRefOid` from GitHub. A numbered PR diff can change during assessment; if the head differs from Step 1, discard the assessment and repeat Steps 1–3 for the new head. If the head cannot be reverified, report the limitation and stop before making a disposition, edit, or reply. Local file evidence is valid only while its commit equals the reverified PR head.
+
 For each piece of feedback, determine one of these dispositions:
 
 1. **Agree — will fix**: The feedback identifies a genuine improvement. Make the change.
@@ -75,6 +81,8 @@ For each piece of feedback, determine one of these dispositions:
 
 For all items where you decided to make a change:
 
+Before editing, verify that the consumer's policy and commands cover the planned edit, test, commit, push, and response. Refresh the PR's `headRefOid` and confirm that the editable checkout's `git rev-parse HEAD` equals that exact SHA. Verify the PR head repository and push target, not just its branch name. If the local head is stale or mismatched, stop and report both SHAs; reconcile the checkout separately, then repeat the comparison. If the local branch differs from the PR's head branch, prepare an editable checkout only in this phase, after confirming that doing so will preserve existing work, and repeat the exact-SHA check before editing. A same-named branch at a different commit is not ready to edit. Do not run an automatic `git pull` as part of this check.
+
 1. Make the change following project conventions
 2. If the change is non-trivial, run the directly affected test suite(s) for fast feedback per `docs/testing-workflow.md`. On build-relevant PRs, CI gates merges with separate `TestUnit`, `TestIntegration`, and `TestE2E` jobs.
 3. For trivial changes (typos, comment fixes, formatting), a build check is sufficient: `dotnet run -- Build`
@@ -91,7 +99,7 @@ Co-Authored-By: <your session's model> <configured-attribution-email>"
 ```
 Use your own session's attribution trailer — see [commit attribution](references/commit-attribution.md).
 
-Push the branch: `git push`
+Push to the verified PR head repository and branch, then confirm the PR's new `headRefOid` equals the pushed commit before replying. Do not rely on an unverified default push target.
 
 ## Step 5: Respond to comments
 
