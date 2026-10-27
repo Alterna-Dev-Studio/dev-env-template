@@ -4,13 +4,28 @@ A small, reusable home for shared development-tool configuration. Secrets live i
 
 ## Quickstart
 
+You end up with your own private copy of this repository on GitHub, cloned to your machine and set up.
+
+1. Install the [GitHub CLI](https://cli.github.com/) and sign in with `gh auth login`. Setup also needs `sops`, `age`, and `direnv`. If any are missing it stops and tells you how to install them ([details](docs/secrets.md#prerequisites)).
+2. Go to the folder that should hold your copy, for example `cd ~/work`.
+3. Run this, replacing `my-dev-env` with the name you want for your repository:
+
+   ```bash
+   bash <(curl -fsSL https://raw.githubusercontent.com/Alterna-Dev-Studio/dev-env-template/main/scripts/new-dev-env) my-dev-env
+   ```
+
+4. Answer the prompts. Setup asks for your Taiga URL, username, and password, and the password is not shown as you type.
+5. Back up the key file that setup prints at the end. Without it you cannot decrypt your secrets.
+6. Open a new terminal. Your credentials and tool paths are now loaded.
+
+The command above makes a private repository under your GitHub account from this template, clones it into `./my-dev-env`, and runs `./scripts/setup` inside it. To use an organization, give `owner/name`. Setup options such as `--skip-taiga-mcp` go after the name. If you'd rather not run a script straight from the web, these two commands do the same thing:
+
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/Alterna-Dev-Studio/dev-env-template/main/scripts/new-dev-env) my-dev-env
+gh repo create my-dev-env --template Alterna-Dev-Studio/dev-env-template --private --clone
+cd my-dev-env && ./scripts/setup
 ```
 
-The wrapper needs the GitHub CLI (`gh`), signed in. It runs `gh repo create my-dev-env --template Alterna-Dev-Studio/dev-env-template --private --clone`, waits for GitHub to finish copying the template files, then runs `cd my-dev-env && ./scripts/setup`. Name it `owner/name` to create the repository under an organization, and add setup options such as `--skip-taiga-mcp` after the name. Rather than piping a script from the web, you can run those two commands yourself.
-
-Setup checks for missing tools, creates the age key and encrypted profile, wires your Bash startup files, asks (hidden input) for the Taiga login, allows the clone's `.envrc`, installs the Taiga MCP server when `uv` is present (`--skip-taiga-mcp` opts out), and ends by printing the key file to back up. Then open a new Bash shell.
+Setup also adds a few lines to your Bash startup files, allows the clone's `.envrc`, and installs the Taiga MCP server if `uv` is present. Running it again is safe.
 
 ## Commands
 
