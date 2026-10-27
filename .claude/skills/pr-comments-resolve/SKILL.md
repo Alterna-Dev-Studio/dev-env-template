@@ -242,7 +242,7 @@ If a matching item already exists, skip creation and reference the existing item
 
 #### 4d. Create the Taiga item
 
-**For bugs (Issues):** follow `.claude/skills/shared/bug-filing.md` with source tag `src:pr-review`. Severity and priority come from `docs/bug-triage.md`, not from a guess; that policy is not installed in this repository, so follow the consumer note in `bug-filing.md`. Prefix the description template with:
+**For bugs (Issues):** follow `.claude/skills/shared/bug-filing.md` with source tag `src:pr-review`. Severity and priority come from [docs/bug-triage.md](../../../docs/bug-triage.md), not from a guess. Prefix the description template with:
 
 ```
 Discovered during PR #$ARGUMENTS review.

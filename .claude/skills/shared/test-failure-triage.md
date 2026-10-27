@@ -38,9 +38,9 @@ The failure is genuinely pre-existing. Proceed to Step 3.
 3. If no existing bug is found, file one following `.claude/skills/shared/bug-filing.md`:
    - Subject: `Pre-existing test failure: <test name>`
    - Description: Include the test name, test suite, error message, commit hash where verified broken, and which branch/PR discovered it
-   - Severity per `docs/bug-triage.md` (not installed here; see the consumer note in bug filing): Important if the failure is deterministic on `main` (main is red for that suite), Normal if it is flaky or environment-dependent
-   - Priority: from the matrix (surface is `ci` unless the failure only reproduces in the local dev stack, then `devx`)
-   - Tags: surface tag, `src:agent`, and `pre-existing-failure`
+   - Severity per [docs/bug-triage.md](../../../docs/bug-triage.md): Important if the failure is deterministic on `main` (main is red for that suite), Normal if it is flaky or environment-dependent
+   - Priority: from the matrix (surface is the area the failing test covers: `devx`, `secrets`, `taiga`, or `skills`)
+   - Tags: `dev-env-template`, surface tag, `src:agent`, and `pre-existing-failure`
 4. Note the bug ref number
 
 ## Step 4: Return to your branch and continue
