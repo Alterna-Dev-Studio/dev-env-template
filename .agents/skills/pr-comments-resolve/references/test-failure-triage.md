@@ -40,7 +40,7 @@ The failure is genuinely pre-existing. Proceed to Step 3.
    - Description: Include the test name, test suite, error message, commit hash where verified broken, and which branch/PR discovered it
    - Severity per [docs/bug-triage.md](../../../../docs/bug-triage.md): Important if the failure is deterministic on `main` (main is red for that suite), Normal if it is flaky or environment-dependent
    - Priority: from the matrix (surface is the area the failing test covers: `devx`, `secrets`, `taiga`, or `skills`)
-   - Tags: `dev-env-template`, surface tag, `src:agent`, and `pre-existing-failure`
+   - Tags: `repo:dev-env-template`, surface tag, `src:agent`, and `pre-existing-failure`
 4. Note the bug ref number
 
 ## Step 4: Return to your branch and continue

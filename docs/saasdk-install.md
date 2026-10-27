@@ -407,12 +407,12 @@ All files are mode 100644. Hashes are SHA-256.
 | Path | Source SHA-256 | Installed |
 | --- | --- | --- |
 | `.claude/skills/pr-comments-resolve/SKILL.md` | `d558ed145b4cc3460ab9dd320dac4686918d77156d1c2cc7b1ec035aa7ea2d97` | patched, `2d8bfcf42643c5f34c55a0bb4c83541a7521fa03fa8546fd0f549620dc1684cf` |
-| `.claude/skills/shared/test-failure-triage.md` | `986039f042632873eec99843d761819d06c24b42909b6fc36790bd166f308958` | patched, `34726e5461442d7f5b1f8272c22c2c01edc7b7b8a5f441630b995eecfda8617e` |
-| `.claude/skills/shared/bug-filing.md` | `34141f5eea232fe99e013c33f173d3c976534874f3d94f14c1fa4dcb1c50c29e` | patched, `c6bf69e9b82b74e03dccee2a7f254f5a9908520bc4a1b78cb3c505a5b430e573` |
+| `.claude/skills/shared/test-failure-triage.md` | `986039f042632873eec99843d761819d06c24b42909b6fc36790bd166f308958` | patched, `0e62e51538e5782e73f982b4463ada02d98c61e6cf202caed3359f494bc0c27e` |
+| `.claude/skills/shared/bug-filing.md` | `34141f5eea232fe99e013c33f173d3c976534874f3d94f14c1fa4dcb1c50c29e` | patched, `4d91a367d6570144c17696d587fc73bbaa936b8388d35111224991d3a8cae207` |
 | `.claude/skills/shared/commit-attribution.md` | `b357f72263d3cd2409fa5d5c6acb1996ed4f9d4543e84db9a01351f28b56b82c` | already installed, byte-identical |
 | `.agents/skills/pr-comments-resolve/SKILL.md` | `beb66af45fee15f1221e7707e4ac9924e3c5cd6eea2ef944c4c599e83c48b430` | patched, `6a1a2d3636f1a418adc72eb09065309a3aa59ee8638c4462c456b038f9fa2b81` |
-| `.agents/skills/pr-comments-resolve/references/test-failure-triage.md` | `8c66fec2e5b1a2aca37129d96affb0540a697620fbbea40e0dde27f6bb2a4ea7` | patched, `7aa3181271d6e81a60e9714edb88211573c23ccf5f42cf12a561ac6cd19367c7` |
-| `.agents/skills/pr-comments-resolve/references/bug-filing.md` | `497aa2f56141a0df6457eee65fbfba2f4604ff0bc41c804cd8acdc47eccf33bb` | patched, `a2e868baed8a3aa9743f970bca961efc367d67b68e01859f5620478b0ac966b4` |
+| `.agents/skills/pr-comments-resolve/references/test-failure-triage.md` | `8c66fec2e5b1a2aca37129d96affb0540a697620fbbea40e0dde27f6bb2a4ea7` | patched, `7e26298a5c3617ac81aedd669c2a9f430344626f243f6d0e256ef9c2a9155daf` |
+| `.agents/skills/pr-comments-resolve/references/bug-filing.md` | `497aa2f56141a0df6457eee65fbfba2f4604ff0bc41c804cd8acdc47eccf33bb` | patched, `af8478c3111e9bfbd33df2a48b61d2a2114d4f366e66a392904d6f7384c7127b` |
 | `.agents/skills/pr-comments-resolve/references/commit-attribution.md` | `d00569f163ff6608aca289a9fd8c7cff49a474a37bb0c85dd6d460980e93f780` | byte-identical |
 
 ### Consumer-local patches
@@ -429,7 +429,7 @@ ID appears in any installed file; statuses, types, severities, and priorities
 are resolved by name. Both `bug-filing.md` copies, both triage companions, and
 both bodies link this repository's [bug triage policy](bug-triage.md) and use
 its tags: surface `devx`, `secrets`, `taiga`, or `skills`, plus the repository
-tag `dev-env-template`; `src:user` and `src:monitor` are dropped, and the
+tag `repo:dev-env-template`; `src:user` and `src:monitor` are dropped, and the
 priority list has no Urgent because project 4 has none. Unified diffs:
 
 ```diff
@@ -550,7 +550,7 @@ priority list has no Urgent because project 4 has none. Unified diffs:
 -   sweep confirms it.
 -4. **Priority**: read it off the severity × surface matrix, then apply the modifiers. If you
 +1. **Surface** (exactly one): `devx`, `secrets`, `taiga`, `skills`. Always add the repository
-+   tag `dev-env-template`; project 4 is shared with other repositories.
++   tag `repo:dev-env-template`; project 4 is shared with other repositories.
 +2. **Source** (exactly one): `src:manual-test`, `src:pr-review`, `src:agent`, `src:jon`.
 +   Skills filing on their own behalf use `src:agent`; the manual-testing agent uses
 +   `src:manual-test`; PR comment resolution uses `src:pr-review`.
@@ -575,7 +575,7 @@ priority list has no Urgent because project 4 has none. Unified diffs:
      kwargs={
          "description": "<template below>",
 -        "tags": [["<surface>", null], ["<source>", null]]
-+        "tags": [["dev-env-template", null], ["<surface>", null], ["<source>", null]]
++        "tags": [["repo:dev-env-template", null], ["<surface>", null], ["<source>", null]]
      }
  )
  ```
@@ -608,7 +608,7 @@ priority list has no Urgent because project 4 has none. Unified diffs:
 -   - Tags: surface tag, `src:agent`, and `pre-existing-failure`
 +   - Severity per [docs/bug-triage.md](../../../docs/bug-triage.md): Important if the failure is deterministic on `main` (main is red for that suite), Normal if it is flaky or environment-dependent
 +   - Priority: from the matrix (surface is the area the failing test covers: `devx`, `secrets`, `taiga`, or `skills`)
-+   - Tags: `dev-env-template`, surface tag, `src:agent`, and `pre-existing-failure`
++   - Tags: `repo:dev-env-template`, surface tag, `src:agent`, and `pre-existing-failure`
  4. Note the bug ref number
 
  ## Step 4: Return to your branch and continue
@@ -680,7 +680,7 @@ priority list has no Urgent because project 4 has none. Unified diffs:
 -   sweep confirms it.
 -4. **Priority**: read it off the severity × surface matrix, then apply the modifiers. If you
 +1. **Surface** (exactly one): `devx`, `secrets`, `taiga`, `skills`. Always add the repository
-+   tag `dev-env-template`; project 4 is shared with other repositories.
++   tag `repo:dev-env-template`; project 4 is shared with other repositories.
 +2. **Source** (exactly one): `src:manual-test`, `src:pr-review`, `src:agent`, `src:jon`.
 +   Skills filing on their own behalf use `src:agent`; the manual-testing agent uses
 +   `src:manual-test`; PR comment resolution uses `src:pr-review`.
@@ -698,7 +698,7 @@ priority list has no Urgent because project 4 has none. Unified diffs:
      kwargs={
          "description": "<template below>",
 -        "tags": [["<surface>", null], ["<source>", null]]
-+        "tags": [["dev-env-template", null], ["<surface>", null], ["<source>", null]]
++        "tags": [["repo:dev-env-template", null], ["<surface>", null], ["<source>", null]]
      }
  )
  ```
@@ -731,7 +731,7 @@ priority list has no Urgent because project 4 has none. Unified diffs:
 -   - Tags: surface tag, `src:agent`, and `pre-existing-failure`
 +   - Severity per [docs/bug-triage.md](../../../../docs/bug-triage.md): Important if the failure is deterministic on `main` (main is red for that suite), Normal if it is flaky or environment-dependent
 +   - Priority: from the matrix (surface is the area the failing test covers: `devx`, `secrets`, `taiga`, or `skills`)
-+   - Tags: `dev-env-template`, surface tag, `src:agent`, and `pre-existing-failure`
++   - Tags: `repo:dev-env-template`, surface tag, `src:agent`, and `pre-existing-failure`
  4. Note the bug ref number
 
  ## Step 4: Return to your branch and continue

@@ -2,7 +2,7 @@
 
 How bugs in this repository get a severity, a priority, and tags. Bugs live in Taiga project 4
 (Alterna Dev Studio, slug `alterna-dev-studio`), which other repositories share, so every bug
-for this repository carries the `dev-env-template` tag. The filing procedure for skills is
+for this repository carries the `repo:dev-env-template` tag. The filing procedure for skills is
 [.claude/skills/shared/bug-filing.md](../.claude/skills/shared/bug-filing.md).
 
 ## Principles
@@ -29,7 +29,7 @@ Resolve IDs by exact name at run time and never hardcode them: `get_issue_types`
 
 Spell tags exactly as below.
 
-- **Repository** (required): `dev-env-template`.
+- **Repository** (required): `repo:dev-env-template`.
 - **Surface** (exactly one):
 
   | Tag | Covers |
@@ -84,7 +84,7 @@ use this description template. Never apply `triaged` when filing.
 
 ## Triage
 
-Jon, or an agent asked to triage, takes open Bug issues in project 4 tagged `dev-env-template`
+Jon, or an agent asked to triage, takes open Bug issues in project 4 tagged `repo:dev-env-template`
 and not `triaged`, in ref order:
 
 1. If expected, actual, or reproduce is missing, set Needs Info with a comment saying what is

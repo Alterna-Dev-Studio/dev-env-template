@@ -21,7 +21,7 @@ via `scripts/taiga-comment.sh <id> "<evidence>" --issue`.
 ## Step 3: Classify per the triage policy
 
 1. **Surface** (exactly one): `devx`, `secrets`, `taiga`, `skills`. Always add the repository
-   tag `dev-env-template`; project 4 is shared with other repositories.
+   tag `repo:dev-env-template`; project 4 is shared with other repositories.
 2. **Source** (exactly one): `src:manual-test`, `src:pr-review`, `src:agent`, `src:jon`.
    Skills filing on their own behalf use `src:agent`; the manual-testing agent uses
    `src:manual-test`; PR comment resolution uses `src:pr-review`.
@@ -43,7 +43,7 @@ create_issue(
     priority_id=<id>,
     kwargs={
         "description": "<template below>",
-        "tags": [["dev-env-template", null], ["<surface>", null], ["<source>", null]]
+        "tags": [["repo:dev-env-template", null], ["<surface>", null], ["<source>", null]]
     }
 )
 ```
