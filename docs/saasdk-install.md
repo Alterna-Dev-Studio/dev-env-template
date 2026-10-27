@@ -48,7 +48,7 @@ All SAASDK files are mode 100644. Hashes are SHA-256.
 | Path | Source SHA-256 | Installed |
 | --- | --- | --- |
 | `.claude/skills/analyze-story/SKILL.md` | `18b2e8907ef032ee57a9976abdddf9e2760b540095245a1d15318a4207a7ad88` | patched, `ab548cd4c8a588d910d24784af22322bb3575dc504e56eba4d16922bdf0fb7da` |
-| `.claude/skills/implement-story/SKILL.md` | `ed4540992b7b0109910094e48e59f858c333b365bd27aac33be6a3caa83a9966` | patched, `62e6f3a2329ee366017c39c03fc9ab64347fd88828c4b05abc89d05857c8f3ee` |
+| `.claude/skills/implement-story/SKILL.md` | `ed4540992b7b0109910094e48e59f858c333b365bd27aac33be6a3caa83a9966` | patched, `cda337aa393ab70ae6d6642f21fb3e613161924cfe3b54f18b406ce6cc52f03e` |
 | `.claude/skills/pr-converse/SKILL.md` | `15b46f8e062058fcf651944ca615d6280d9bd6be72d49459c16fc8093e8368fb` | byte-identical |
 | `.claude/skills/review-tests/SKILL.md` | `d3a5632a7c596c9dd3e01cde8d45aff47ca148285314f8baaddabc9e10d1e277` | byte-identical |
 | `.claude/skills/codex-review-pr/SKILL.md` | `dce0a4f22219234a58fe92147eb4f9edf4fa0860ada1bffb5ba06b0c98674b1a` | byte-identical |
@@ -72,7 +72,7 @@ Helper scripts (mode 100755):
 
 | Path | you-thon source SHA-256 | Installed SHA-256 |
 | --- | --- | --- |
-| `scripts/taiga-story.sh` | `47fbce954a02c1951b2dfac92228bdeca4785739835230ba9059985a94185278` | `d99959abcc9b18a75b84798b2c50ea3423e7c0399edfaa9bb90a2d69b086c56e` |
+| `scripts/taiga-story.sh` | `47fbce954a02c1951b2dfac92228bdeca4785739835230ba9059985a94185278` | `e4c9d328887a6de8e7c2e4bd255e988ced06c87ef1770e650adea456c1ecca2c` |
 | `scripts/taiga-comment.sh` | `302a1fdfd11418f024788ec005ff7fe6c3a221394535a3377ecc063c0ada3694` | `786d179c1e601141814598f9e2e7a3206e468a83fb4201481401d45f6a972d52` |
 | `scripts/codex-review-pr.sh` | `58711eee635c11726e3204750f13ccfec8118a1c5950b2ca346a5e40cfd0a41e` | `5e901ea7564bb72f9aaddab1149a629b9e85985dc795f6f7740d2503998e1b61` |
 
@@ -81,8 +81,12 @@ Helper scripts (mode 100755):
 Two Claude bodies are patched because they hardcode You-Thon's Taiga project
 (3), its "Ready to Implement" status, and its F#/.NET test commands. The Codex
 bodies resolve the project live and read `AGENTS.md` first, so they are not
-patched. The three helper scripts gain a provenance comment; `taiga-story.sh`
-also changes its default project from 3 to 4. Unified diffs:
+patched. The three helper scripts gain a provenance comment. `taiga-story.sh` also
+changes its default project from 3 to 4 and only treats a numeric second
+argument as the project ID: the you-thon version took any second argument, so
+`taiga-story.sh <ref> --epic` queried project `--epic` and returned exit 44.
+The `implement-story` description line is also changed from project 3 to 4.
+Unified diffs:
 
 ```diff
 --- saasdk/2a04165/.claude/skills/analyze-story/SKILL.md
@@ -161,6 +165,14 @@ also changes its default project from 3 to 4. Unified diffs:
  
 --- saasdk/2a04165/.claude/skills/implement-story/SKILL.md
 +++ .claude/skills/implement-story/SKILL.md
+@@ -1,6 +1,6 @@
+ ---
+ name: implement-story
+-description: Implement a user story from Taiga project 3
++description: Implement a user story from Taiga project 4
+ argument-hint: "<story-ref> [base-branch]"
+ allowed-tools:
+   - Bash(scripts/taiga-story.sh *)
 @@ -55,13 +55,13 @@
  
  Use the Taiga MCP tools to gather everything you need.
@@ -210,12 +222,17 @@ also changes its default project from 3 to 4. Unified diffs:
      echo "  --issue      Look up an issue instead of a user story"
      echo "  --epic       Look up an epic instead of a user story"
      echo "  --with-tasks Also fetch and include the task list (user stories only)"
-@@ -22,7 +23,7 @@
+@@ -22,7 +23,12 @@
  }
  
  REF="${1:-}"
 -PROJECT_ID="${2:-3}"
-+PROJECT_ID="${2:-4}"
++# Only a numeric second argument is a project ID; a flag in that position keeps the default.
++if [[ "${2:-}" =~ ^[0-9]+$ ]]; then
++    PROJECT_ID="$2"
++else
++    PROJECT_ID=4
++fi
  ITEM_TYPE="userstories"
  WITH_TASKS=false
  
@@ -238,16 +255,20 @@ also changes its default project from 3 to 4. Unified diffs:
 ```
 
 Consumer-owned files added for the skills' required reads: `AGENTS.md` (with
-`CLAUDE.md` as a symlink to it), `docs/testing-workflow.md`. The pilot-only
+`CLAUDE.md` as a symlink to it), `docs/testing-workflow.md`, and `.mcp.json`,
+which launches pytaiga-mcp in full mode for Claude Code in this repository. The pilot-only
 framing was removed from `docs/testing-strategy.md` and
 `docs/testing-conventions.md`.
 
 ## Known limits
 
-- The Claude `allowed-tools` lists name `mcp__taiga-py__get_user_story`,
-  `list_epics`, `get_project_members`, and similar. The `taiga-py` server in
-  use exposes `get_story`, `get_epic_overview`, `search`, and so on. The grants
-  were left as accepted; `AGENTS.md` tells the agent to map by operation.
+- pytaiga-mcp ships two servers. The user-level Claude Code config runs
+  `workflow` mode (about 34 ref-based intent tools such as `get_story`,
+  `set_story_status`); Codex runs `full` mode (107 id-based CRUD tools). The
+  SAASDK Claude bodies and their `mcp__taiga-py__*` grants are written against
+  `full`. The repo-level `.mcp.json` therefore launches `taiga-mcp full` so the
+  names match without porting the bodies. The launcher path is personal
+  (`jon-dev-env`); a fresh clone must supply its own.
 - `.claude/skills/shared/merge-side-effects.md` and
   `.claude/skills/shared/taiga-pagination.md` are byte-identical and still
   show You-Thon status IDs (14, 17, 18) and `project_id=3` in examples.
@@ -261,9 +282,6 @@ framing was removed from `docs/testing-strategy.md` and
 - `scripts/codex-review-pr.sh` is unchanged apart from the provenance line and
   needs `codex`, `gh`, and `jq`. Its review and comment paths were not
   exercised by this install.
-- Epic 2466 (the dev-env epic named in the pilot doc) is not resolvable with
-  `scripts/taiga-story.sh 2466 --epic` in project 4 or 3 (exit 44). Story 2467
-  in project 4 resolves. The epic lookup path was not investigated further.
 
 ## Verification
 
@@ -273,6 +291,8 @@ git diff --check                                 # clean
 bash -n scripts/*.sh                             # ok
 shellcheck -S warning scripts/taiga-story.sh scripts/taiga-comment.sh scripts/codex-review-pr.sh   # clean
 scripts/taiga-story.sh 2467                      # exit 0; story 2467 "Make dev-env-template shell setup portable…", In progress, project 4
+scripts/taiga-story.sh 2466 --epic               # exit 0; epic 2466 "Portable developer and agent environment", project 4 (failed with exit 44 before the argument fix)
+scripts/taiga-story.sh 2467 4 --with-tasks       # exit 0; 4 tasks
 ```
 
 Every relative Markdown link under `.claude/skills/`, `.agents/skills/`,
@@ -307,6 +327,21 @@ You-Thon values; the F# guidance in Steps 5 to 7 and the `docs/designs/`
 expectation remain. It also noted this install doc was missing, because the
 smoke ran before the doc was written. No file changed and no Taiga call was
 made; exit 0.
+
+Claude full-mode smoke through the repo `.mcp.json` (`--strict-mcp-config
+--mcp-config .mcp.json`):
+
+- Plan mode, `/implement-story 2467` stopped before Step 0: all seven
+  `mcp__taiga-py__*` grants in the frontmatter were present in the session
+  (`get_user_story`, `update_user_story`, `assign_user_story_to_user`,
+  `get_task`, `update_task`, `get_user_story_statuses`,
+  `get_project_members`); the body uses project 4 and reviewer
+  `bigjonroberts`. Plan mode blocked the MCP calls themselves.
+- Non-plan run with `--allowedTools` limited to `get_default_session` and
+  `get_user_story_by_ref`: the session auto-authenticated and
+  `get_user_story_by_ref(project_id=4, ref=2467)` returned "Make
+  dev-env-template shell setup portable across hosts and devcontainers",
+  status In progress. No write tool was granted; exit 0.
 
 The full `analyze-story` and `implement-story` write paths (Taiga mutation,
 branch, PR) were not exercised by this install.

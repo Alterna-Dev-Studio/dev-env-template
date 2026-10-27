@@ -23,7 +23,12 @@ usage() {
 }
 
 REF="${1:-}"
-PROJECT_ID="${2:-4}"
+# Only a numeric second argument is a project ID; a flag in that position keeps the default.
+if [[ "${2:-}" =~ ^[0-9]+$ ]]; then
+    PROJECT_ID="$2"
+else
+    PROJECT_ID=4
+fi
 ITEM_TYPE="userstories"
 WITH_TASKS=false
 

@@ -1,6 +1,6 @@
 ---
 name: implement-story
-description: Implement a user story from Taiga project 3
+description: Implement a user story from Taiga project 4
 argument-hint: "<story-ref> [base-branch]"
 allowed-tools:
   - Bash(scripts/taiga-story.sh *)
