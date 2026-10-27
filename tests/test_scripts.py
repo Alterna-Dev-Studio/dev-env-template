@@ -4,6 +4,7 @@ Run with: python3 -m unittest discover -s tests
 """
 import os
 from pathlib import Path
+import pty
 import shutil
 import subprocess
 import tempfile
@@ -174,15 +175,49 @@ class ScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("invalid variable name", result.stderr)
 
-    def test_setup_names_missing_required_taiga_settings(self):
+    def test_setup_without_tty_names_missing_values_without_prompting(self):
         result = self.run_script("setup")
         self.assertIn("Missing required profile values: TAIGA_API_URL, TAIGA_USERNAME, TAIGA_PASSWORD",
                       result.stdout)
+        self.assertEqual(self.run_script("envtool", "list", "profile").stdout.strip(), "")
         self.store("profile", {"TAIGA_API_URL": "https://taiga.example", "TAIGA_USERNAME": "u",
                                "TAIGA_PASSWORD": "secret-value"})
         result = self.run_script("setup")
-        self.assertNotIn("Missing required", result.stdout)
+        self.assertNotIn("Missing", result.stdout)
+        self.assertNotIn("Still missing", result.stdout)
         self.assertNotIn("secret-value", result.stdout + result.stderr)
+
+    def pty_setup(self, *answers):
+        pid, fd = pty.fork()
+        if pid == 0:
+            os.chdir(self.repo)
+            os.execve(str(self.repo / "scripts/setup"), [str(self.repo / "scripts/setup")], self.env)
+        output = b""
+        pending = list(answers)
+        while True:
+            try:
+                chunk = os.read(fd, 4096)
+            except OSError:
+                break
+            if not chunk:
+                break
+            output += chunk
+            if pending and output.endswith(b": "):
+                os.write(fd, pending.pop(0).encode() + b"\n")
+        _, status = os.waitpid(pid, 0)
+        os.close(fd)
+        return os.waitstatus_to_exitcode(status), output.decode()
+
+    def test_setup_prompts_on_a_tty_and_round_trips_values(self):
+        code, output = self.pty_setup("https://taiga.example", "u", "p")
+        self.assertEqual(code, 0, output)
+        self.assertIn("Saved TAIGA_API_URL, TAIGA_PASSWORD, TAIGA_USERNAME in profile.", output)
+        exported = self.run_script("envtool", "export", "profile").stdout
+        for value in ("https://taiga.example", "u", "p"):
+            self.assertIn(value, exported)
+        code, output = self.pty_setup()
+        self.assertEqual(code, 0, output)
+        self.assertNotIn("TAIGA_", output)
 
     def test_profile_exports_values_in_bash(self):
         self.run_script("setup")

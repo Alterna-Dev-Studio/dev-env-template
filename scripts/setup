@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Initialize SOPS and install the shared profile in Bash."""
 import argparse
+import getpass
 import os
 from pathlib import Path
 import re
@@ -88,6 +89,30 @@ def preflight():
                            + "\n".join(f"  {name}: {TOOLS[name]}" for name in missing))
 
 
+def prompt_missing():
+    """Collect required profile values on a terminal; only name them otherwise."""
+    stored = tool["decrypt"]("profile")
+    missing = [name for name in REQUIRED if not stored.get(name)]
+    if not missing:
+        return
+    hint = "Add each with ./scripts/envtool set profile NAME."
+    if not sys.stdin.isatty():
+        print("Missing required profile values: " + ", ".join(missing) + ". " + hint)
+        return
+    print("Enter the required profile values (input is hidden; leave one blank to skip it).")
+    entered = {name: value for name in missing if (value := getpass.getpass(f"{name}: "))}
+    if entered:
+        stored.update(entered)
+        tool["encrypt"]("profile", stored)
+        check = tool["decrypt"]("profile")
+        if any(check.get(name) != value for name, value in entered.items()):
+            raise RuntimeError("Encrypted profile verification failed")
+        print("Saved " + ", ".join(sorted(entered)) + " in profile.")
+    skipped = [name for name in missing if name not in entered]
+    if skipped:
+        print("Still missing: " + ", ".join(skipped) + ". " + hint)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--migrate-bashrc", nargs="+", metavar="NAME", default=[],
@@ -120,12 +145,7 @@ def main():
         rewrite_bashrc()
         rewrite_loginrc()
         print(f"Updated ~/.bashrc and {LOGINRC} to source the development profile.")
-    stored = tool["decrypt"]("profile")
-    missing = [name for name in REQUIRED if not stored.get(name)]
-    if missing:
-        print("Missing required profile values: " + ", ".join(missing)
-              + ". Add each with ./scripts/envtool set profile NAME.")
-
+    prompt_missing()
 
 if __name__ == "__main__":
     try:
