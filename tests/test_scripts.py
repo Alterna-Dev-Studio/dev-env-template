@@ -191,7 +191,7 @@ class ScriptTests(unittest.TestCase):
 
     def test_profile_exports_values_in_bash(self):
         self.run_script("setup")
-        self.store("profile", {"FOO": "it's here"})
+        self.store("profile", {"FOO": "it's here", "DEV_ENV_HOME": "/stale/clone"})
         result = subprocess.run(["bash", "-c", f'source {self.repo}/profile.sh; printf %s "$FOO"'],
                                 env=self.env, text=True, capture_output=True, check=True)
         self.assertEqual(result.stdout, "it's here")
