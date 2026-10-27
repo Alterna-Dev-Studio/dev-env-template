@@ -26,3 +26,13 @@ fi
 
 uv sync --frozen --directory "$checkout"
 echo "Taiga MCP stdio checkout ready at $checkout"
+
+# Register this clone's launcher with Codex. `codex mcp add` replaces an entry of the
+# same name in place, so re-running is safe. Claude Code reads .mcp.json instead.
+launcher="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/scripts/taiga-mcp"
+if command -v codex >/dev/null; then
+    codex mcp add taiga-py -- "$launcher" full
+    echo "Registered taiga-py for Codex: $launcher full"
+else
+    echo "codex is not on PATH; register later with: codex mcp add taiga-py -- $launcher full"
+fi

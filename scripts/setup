@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Initialize SOPS and install the shared profile in Bash."""
 import argparse
+import getpass
 import os
 from pathlib import Path
 import re
 import runpy
 import shlex
-import shutil
+import subprocess
 import sys
 import tempfile
 
@@ -16,6 +17,13 @@ tool = runpy.run_path(str(ROOT / "scripts/envtool"))
 
 # The repository's own Taiga helpers and MCP launcher cannot run without these.
 REQUIRED = ("TAIGA_API_URL", "TAIGA_USERNAME", "TAIGA_PASSWORD")
+# One install hint per required tool; README.md § Setup has the long form.
+TOOLS = {
+    "sops": "install the .deb from https://github.com/getsops/sops/releases, "
+            "or: go install github.com/getsops/sops/v3/cmd/sops@latest",
+    "age-keygen": "sudo apt install age, or: go install filippo.io/age/cmd/age-keygen@latest",
+    "direnv": "sudo apt install direnv",
+}
 SOURCE = f"[ -f {shlex.quote(str(ROOT / 'profile.sh'))} ] && source {shlex.quote(str(ROOT / 'profile.sh'))}\n"
 BASHRC = Path.home() / ".bashrc"
 LOGINRC = next((Path.home() / name for name in (".bash_profile", ".bash_login")
@@ -23,6 +31,8 @@ LOGINRC = next((Path.home() / name for name in (".bash_profile", ".bash_login")
 LOGIN_SOURCE = (f'if [ -n "${{BASH_VERSION:-}}" ] && [ -f {shlex.quote(str(ROOT / "profile.sh"))} ]; '
                 f'then . {shlex.quote(str(ROOT / "profile.sh"))}; fi\n')
 COMMENT = "# Shared development tooling environment (managed by dev-env setup).\n"
+UV_NOTE = ("Note: uv is not installed, so the Taiga MCP server was not set up. "
+           "Install uv (https://docs.astral.sh/uv/) and run ./scripts/setup-taiga-mcp later.")
 DIRENV = ["# Keep direnv last (managed by dev-env setup).\n", 'eval "$(direnv hook bash)"\n']
 
 
@@ -41,7 +51,7 @@ def rewrite_bashrc(remove_names=()):
                  if "# Keep direnv last" in line
                  or re.search(r"\bdirenv\s+(?:export|hook)\s+bash\b", line)), None)
     if hook is None:
-        lines += [COMMENT, SOURCE] + (DIRENV if shutil.which("direnv") else [])
+        lines += [COMMENT, SOURCE] + (DIRENV if tool["locate"]("direnv") else [])
     else:
         lines[hook:hook] = [COMMENT, SOURCE]
     result = "".join(lines)
@@ -74,14 +84,71 @@ def rewrite_loginrc():
             os.unlink(temporary)
 
 
+def preflight():
+    missing = [name for name in TOOLS if tool["locate"](name) is None]
+    if missing:
+        raise RuntimeError("missing required tools:\n"
+                           + "\n".join(f"  {name}: {TOOLS[name]}" for name in missing))
+
+
+def prompt_missing():
+    """Collect required profile values on a terminal; only name them otherwise."""
+    stored = tool["decrypt"]("profile")
+    missing = [name for name in REQUIRED if not stored.get(name)]
+    if not missing:
+        return
+    hint = "Add each with ./scripts/envtool set profile NAME."
+    if not sys.stdin.isatty():
+        print("Missing required profile values: " + ", ".join(missing) + ". " + hint)
+        return
+    print("Enter the required profile values (input is hidden; leave one blank to skip it).")
+    entered = {name: value for name in missing if (value := getpass.getpass(f"{name}: "))}
+    if entered:
+        stored.update(entered)
+        tool["encrypt"]("profile", stored)
+        check = tool["decrypt"]("profile")
+        if any(check.get(name) != value for name, value in entered.items()):
+            raise RuntimeError("Encrypted profile verification failed")
+        print("Saved " + ", ".join(sorted(entered)) + " in profile.")
+    skipped = [name for name in missing if name not in entered]
+    if skipped:
+        print("Still missing: " + ", ".join(skipped) + ". " + hint)
+
+
+def allow_envrc():
+    direnv = tool["locate"]("direnv")
+    if direnv is None:
+        return
+    result = subprocess.run([direnv, "allow", str(ROOT / ".envrc")], cwd=ROOT,
+                            text=True, capture_output=True)
+    if result.returncode:
+        raise RuntimeError(f"direnv allow failed: {result.stderr.strip()}")
+
+
+def install_taiga_mcp(skip):
+    if skip:
+        return
+    uv = tool["locate"]("uv")
+    if uv is None:
+        print(UV_NOTE)
+        return
+    # The installer checks `command -v uv`, so put the located binary's directory on PATH.
+    env = {**os.environ, "PATH": str(Path(uv).parent) + os.pathsep + os.environ.get("PATH", "")}
+    # Inherit stdout/stderr so uv's progress and the Codex registration line are visible.
+    subprocess.run([str(ROOT / "scripts/setup-taiga-mcp")], cwd=ROOT, env=env, check=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--migrate-bashrc", nargs="+", metavar="NAME", default=[],
                         help="encrypt these exports from the current shell, then remove them from ~/.bashrc")
+    parser.add_argument("--skip-taiga-mcp", action="store_true",
+                        help="do not install the pytaiga-mcp checkout or register it with Codex")
     args = parser.parse_args()
     for name in args.migrate_bashrc:
         if not re.fullmatch(r"[A-Z_][A-Z0-9_]*", name):
             raise RuntimeError(f"invalid variable name {name!r}")
+    preflight()
     tool["initialize"]()
     if args.migrate_bashrc:
         existing = BASHRC.read_text() if BASHRC.exists() else ""
@@ -105,16 +172,16 @@ def main():
         rewrite_bashrc()
         rewrite_loginrc()
         print(f"Updated ~/.bashrc and {LOGINRC} to source the development profile.")
-    stored = tool["decrypt"]("profile")
-    missing = [name for name in REQUIRED if not stored.get(name)]
-    if missing:
-        print("Missing required profile values: " + ", ".join(missing)
-              + ". Add each with ./scripts/envtool set profile NAME.")
+    prompt_missing()
+    allow_envrc()
+    install_taiga_mcp(args.skip_taiga_mcp)
+    print(f"Age identity: {tool['KEY_FILE']}")
+    print("Back it up now: anyone with it can decrypt the vault, and losing it makes the vault unrecoverable.")
 
 
 if __name__ == "__main__":
     try:
         main()
-    except (RuntimeError, OSError) as error:
+    except (RuntimeError, OSError, subprocess.CalledProcessError) as error:
         print(f"setup: {error}", file=sys.stderr)
         raise SystemExit(1)
