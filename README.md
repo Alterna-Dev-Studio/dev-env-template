@@ -6,10 +6,10 @@ A small, reusable home for shared development-tool configuration. Secrets live i
 
 ```bash
 gh repo create my-dev-env --template Alterna-Dev-Studio/dev-env-template --private --clone
-cd my-dev-env && ./scripts/setup && ./scripts/envtool edit profile
+cd my-dev-env && ./scripts/setup
 ```
 
-The editor opens the decrypted profile as JSON; add the [required variables](#shared-variables) and any personal ones, then save. Open a new Bash shell. Everything below explains what those two commands did and how to add project-scoped secrets.
+Setup checks for `sops`, `age-keygen`, and `direnv`, creates the age identity and encrypted profile, wires the Bash startup files, prompts (hidden input) for the three [required variables](#shared-variables), allows the clone's `.envrc` with direnv, installs the Taiga MCP server when `uv` is present (`--skip-taiga-mcp` opts out), and ends by printing the key file to back up. Then open a new Bash shell. Everything below explains what setup did and how to add project-scoped secrets.
 
 ## Setup
 
@@ -18,9 +18,9 @@ Requirements: Bash, Python 3, `direnv`, `sops` (3.9 or newer), and `age-keygen`.
 The age identity is read from `$SOPS_AGE_KEY_FILE`, else `$XDG_CONFIG_HOME/sops/age/keys.txt`, else `~/.config/sops/age/keys.txt`, matching SOPS. Encryption always uses the recipients in `.sops.yaml`, so the key file may hold other identities too. To let another key decrypt the vault, add it to the `age:` list in `.sops.yaml` (comma-separated) and run `sops updatekeys` on each file under `secrets/`.
 
 1. Create a private repository from this GitHub template and clone it.
-2. Run `./scripts/setup`. This creates `~/.config/sops/age/keys.txt`, `.sops.yaml`, and an encrypted profile, then adds guarded source lines to `~/.bashrc` and the Bash login file (`~/.profile` unless `~/.bash_profile` or `~/.bash_login` exists). It adds the direnv hook if `.bashrc` lacks one, after the profile source, and names any [required variable](#shared-variables) the profile still lacks.
-3. Back up the age identity securely. Anyone with that file can decrypt the vault; losing it makes the vault unrecoverable.
-4. Add shared variables with `./scripts/envtool set profile TAIGA_PASSWORD` (input is hidden), or `./scripts/envtool edit profile`.
+2. Run `./scripts/setup`. It first checks the prerequisites and names any missing tool with an install hint before creating anything. It then creates `~/.config/sops/age/keys.txt`, `.sops.yaml`, and an encrypted profile, then adds guarded source lines to `~/.bashrc` and the Bash login file (`~/.profile` unless `~/.bash_profile` or `~/.bash_login` exists). It adds the direnv hook if `.bashrc` lacks one, after the profile source, and names any [required variable](#shared-variables) the profile still lacks.
+3. Back up the age identity securely; setup prints its path. Anyone with that file can decrypt the vault; losing it makes the vault unrecoverable.
+4. If you skipped a prompt, add the value later with `./scripts/envtool set profile NAME` (input is hidden), or use `./scripts/envtool edit profile`. `./scripts/envtool --help` documents every subcommand.
 5. Start a new Bash shell. `./scripts/envtool list profile` displays names only.
 
 If `.bashrc` already exports values you want in the vault, run `./scripts/setup --migrate-bashrc NAME...` from a shell where they are set. It encrypts and verifies the named values before removing their export lines; other exports are left alone. Review the encrypted variable names with `envtool list`; secret values are never printed by setup.
@@ -61,7 +61,7 @@ For a devcontainer, launch VS Code or the devcontainer CLI from a host shell tha
 
 ## Taiga MCP
 
-`./scripts/setup-taiga-mcp` clones [pytaiga-mcp](https://github.com/Alterna-Dev-Studio/pytaiga-mcp) into `~/work/utils/pytaiga-mcp` (override with `PYTAIGA_MCP_HOME`) and installs its locked dependencies with `uv`. `scripts/taiga-mcp workflow|full [profile|project/NAME]` then launches it over stdio with `TAIGA_API_URL`, `TAIGA_USERNAME`, and `TAIGA_PASSWORD` decrypted from the chosen vault scope; neither client configuration holds credentials. The committed `.mcp.json` points Claude Code at `scripts/taiga-mcp full` for this repository, which is the tool set the installed skills expect. Register the same launcher for Codex with `codex mcp add taiga-py -- "$PWD/scripts/taiga-mcp" full`. For a user-wide Claude entry, `claude mcp add -s user taiga-py -- "$PWD/scripts/taiga-mcp" workflow` gives the smaller ref-based tool set.
+`./scripts/setup-taiga-mcp` clones [pytaiga-mcp](https://github.com/Alterna-Dev-Studio/pytaiga-mcp) into `~/work/utils/pytaiga-mcp` (override with `PYTAIGA_MCP_HOME`) and installs its locked dependencies with `uv`. `scripts/taiga-mcp workflow|full [profile|project/NAME]` then launches it over stdio with `TAIGA_API_URL`, `TAIGA_USERNAME`, and `TAIGA_PASSWORD` decrypted from the chosen vault scope; neither client configuration holds credentials. The committed `.mcp.json` points Claude Code at `scripts/taiga-mcp full` for this repository, which is the tool set the installed skills expect. `./scripts/setup-taiga-mcp` (run by setup when `uv` is available) also registers the launcher for Codex when `codex` is on PATH. For a user-wide Claude entry, `claude mcp add -s user taiga-py -- "$PWD/scripts/taiga-mcp" workflow` gives the smaller ref-based tool set.
 
 ## Agent skills
 
