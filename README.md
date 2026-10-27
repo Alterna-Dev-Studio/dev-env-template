@@ -2,6 +2,15 @@
 
 A small, reusable home for shared development-tool configuration. Secrets live in SOPS-encrypted JSON; the age identity stays outside Git. `profile.sh` sources portable PATH and optional alias fragments, then loads shared credentials. Project `.envrc` files can load additional encrypted values.
 
+## Quickstart
+
+```bash
+gh repo create my-dev-env --template Alterna-Dev-Studio/dev-env-template --private --clone
+cd my-dev-env && ./scripts/setup --add-keys
+```
+
+Then open a new Bash shell. Everything below explains what those two commands did and how to add project-scoped secrets.
+
 ## Setup
 
 Requirements: Bash, Python 3, `direnv`, `sops` (3.9 or newer), and `age-keygen`. On Debian or Ubuntu, `sudo apt install direnv age` covers direnv and age; install SOPS from the `.deb` on its [releases page](https://github.com/getsops/sops/releases) and compare its SHA-256 with the digest GitHub shows for that file (the release checksum list omits packages). With Go, `go install github.com/getsops/sops/v3/cmd/sops@latest` and `go install filippo.io/age/cmd/age-keygen@latest` also work; the scripts find binaries in `~/go/bin` too.
