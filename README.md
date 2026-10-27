@@ -32,6 +32,10 @@ Run `direnv allow` in the project. Project values override profile defaults. The
 
 For a devcontainer, launch VS Code or the devcontainer CLI from a host shell that has loaded the desired environment. Explicitly opt in each repository by merging `examples/devcontainer.jsonc` into its devcontainer configuration. Its read-only bind mount exposes only `shell/` at `/opt/dev-env-shell`; `postCreateCommand` installs source blocks into the container user's Bash startup files. If the project already has a `postCreateCommand`, add `bash /opt/dev-env-shell/install-container.sh` to that command. Adjust the sample `/home/vscode` credential mount targets to the project's container user. `containerEnv` passes selected host variables, including `GH_TOKEN_FOR_PACKAGES`; neither the age identity nor encrypted vault is mounted or decrypted in the container. Claude and Codex authentication files remain in their existing home directories and are mounted from there; they are not copied into this repository.
 
+## Agent skills
+
+SAASDK native skills `analyze-story`, `implement-story`, `pr-converse`, `review-tests`, and `codex-review-pr` are installed for Claude Code (`.claude/skills/`) and Codex (`.agents/skills/`). `AGENTS.md` holds the consumer-local Taiga mapping they read first; `docs/saasdk-install.md` records the pinned sources, per-file hashes, patches, and verification.
+
 Run the tests with `python3 -m unittest discover -s tests`. They use a temporary home directory and never touch your key or vault.
 
 Never commit the age identity, decrypted JSON, `.env`, or `.env.local`. An encrypted repo still reveals variable names and recipient metadata, so keep personal vaults private.
