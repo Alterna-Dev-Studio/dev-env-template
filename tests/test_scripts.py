@@ -211,7 +211,9 @@ class ScriptTests(unittest.TestCase):
         pid, fd = pty.fork()
         if pid == 0:
             os.chdir(self.repo)
-            os.execve(str(self.repo / "scripts/setup"), [str(self.repo / "scripts/setup")], self.env)
+            # --skip-taiga-mcp: with uv on the host PATH, setup would otherwise clone pytaiga-mcp.
+            os.execve(str(self.repo / "scripts/setup"),
+                      [str(self.repo / "scripts/setup"), "--skip-taiga-mcp"], self.env)
         output = b""
         pending = list(answers)
         while True:
