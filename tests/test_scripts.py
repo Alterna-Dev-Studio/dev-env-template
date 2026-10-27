@@ -34,7 +34,9 @@ class ScriptTests(unittest.TestCase):
         self.key = self.home / ".config/sops/age/keys.txt"
         self.bashrc = self.home / ".bashrc"
 
-    def run_script(self, *args, check=True):
+    def run_script(self, *args, check=True, skip_taiga_mcp=True):
+        if args[0] == "setup" and skip_taiga_mcp and "--skip-taiga-mcp" not in args:
+            args = (*args, "--skip-taiga-mcp")
         result = subprocess.run([str(self.repo / "scripts" / args[0]), *args[1:]], env=self.env,
                                 cwd=self.repo, stdin=subprocess.DEVNULL, text=True, capture_output=True)
         if check and result.returncode:
@@ -252,7 +254,7 @@ class ScriptTests(unittest.TestCase):
                                 env=self.env, text=True, capture_output=True, check=True)
         self.assertEqual(result.stdout, str(self.repo))
 
-    def test_setup_taiga_mcp_registers_launcher_for_codex(self):
+    def fake_taiga_mcp(self):
         checkout = self.tmp / "pytaiga-mcp"
         (checkout / "src").mkdir(parents=True)
         for name in ("pyproject.toml", "uv.lock", "src/server_workflow.py", "src/server_full.py"):
@@ -266,6 +268,10 @@ class ScriptTests(unittest.TestCase):
         uv_log, codex_log = self.tmp / "uv.log", self.tmp / "codex.log"
         self.env.update(PYTAIGA_MCP_HOME=str(checkout), UV_LOG=str(uv_log), CODEX_LOG=str(codex_log),
                         PATH=f"{shims}:{os.environ['PATH']}")
+        return checkout, shims, uv_log, codex_log
+
+    def test_setup_taiga_mcp_registers_launcher_for_codex(self):
+        checkout, shims, uv_log, codex_log = self.fake_taiga_mcp()
         launcher = self.repo / "scripts/taiga-mcp"
         entry = f"mcp add taiga-py -- {launcher} full"
 
@@ -281,6 +287,24 @@ class ScriptTests(unittest.TestCase):
         self.env["PATH"] = f"{shims}:/usr/bin:/bin"
         result = self.run_script("setup-taiga-mcp")
         self.assertIn("codex is not on PATH", result.stdout)
+
+    def test_setup_runs_taiga_mcp_install_when_uv_present(self):
+        checkout, shims, uv_log, codex_log = self.fake_taiga_mcp()
+        entry = f"mcp add taiga-py -- {self.repo / 'scripts/taiga-mcp'} full"
+
+        result = self.run_script("setup", skip_taiga_mcp=False)
+        self.assertIn(entry, codex_log.read_text())
+        self.assertIn("Registered taiga-py for Codex", result.stdout)
+        self.assertIn("Back it up now", result.stdout.splitlines()[-1])
+
+        before = (uv_log.read_text(), codex_log.read_text())
+        self.run_script("setup")
+        self.assertEqual((uv_log.read_text(), codex_log.read_text()), before)
+
+        (shims / "uv").unlink()
+        self.env["PATH"] = f"{shims}:/usr/bin:/bin"
+        result = self.run_script("setup", skip_taiga_mcp=False)
+        self.assertIn("uv is not installed", result.stdout)
 
 
 class HelpAndPreflightTests(unittest.TestCase):
@@ -318,6 +342,12 @@ class HelpAndPreflightTests(unittest.TestCase):
         result = self.run_script("envtool", "init", "--help")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("called by setup", result.stdout)
+
+    def test_setup_help_lists_skip_flag(self):
+        result = self.run_script("setup", "--help")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("--skip-taiga-mcp", result.stdout)
+        self.assertIn("--migrate-bashrc", result.stdout)
 
     def copy_repo(self):
         repo = self.tmp / "repo"

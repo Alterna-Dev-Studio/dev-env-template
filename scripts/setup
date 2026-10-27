@@ -32,6 +32,8 @@ LOGINRC = next((Path.home() / name for name in (".bash_profile", ".bash_login")
 LOGIN_SOURCE = (f'if [ -n "${{BASH_VERSION:-}}" ] && [ -f {shlex.quote(str(ROOT / "profile.sh"))} ]; '
                 f'then . {shlex.quote(str(ROOT / "profile.sh"))}; fi\n')
 COMMENT = "# Shared development tooling environment (managed by dev-env setup).\n"
+UV_NOTE = ("Note: uv is not installed, so the Taiga MCP server was not set up. "
+           "Install uv (https://docs.astral.sh/uv/) and run ./scripts/setup-taiga-mcp later.")
 DIRENV = ["# Keep direnv last (managed by dev-env setup).\n", 'eval "$(direnv hook bash)"\n']
 
 
@@ -124,10 +126,22 @@ def allow_envrc():
         raise RuntimeError(f"direnv allow failed: {result.stderr.strip()}")
 
 
+def install_taiga_mcp(skip):
+    if skip:
+        return
+    if tool["locate"]("uv") is None:
+        print(UV_NOTE)
+        return
+    # Inherit stdout/stderr so uv's progress and the Codex registration line are visible.
+    subprocess.run([str(ROOT / "scripts/setup-taiga-mcp")], cwd=ROOT, check=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--migrate-bashrc", nargs="+", metavar="NAME", default=[],
                         help="encrypt these exports from the current shell, then remove them from ~/.bashrc")
+    parser.add_argument("--skip-taiga-mcp", action="store_true",
+                        help="do not install the pytaiga-mcp checkout or register it with Codex")
     args = parser.parse_args()
     for name in args.migrate_bashrc:
         if not re.fullmatch(r"[A-Z_][A-Z0-9_]*", name):
@@ -158,6 +172,7 @@ def main():
         print(f"Updated ~/.bashrc and {LOGINRC} to source the development profile.")
     prompt_missing()
     allow_envrc()
+    install_taiga_mcp(args.skip_taiga_mcp)
     print(f"Age identity: {tool['KEY_FILE']}")
     print("Back it up now: anyone with it can decrypt the vault, and losing it makes the vault unrecoverable.")
 
@@ -165,6 +180,6 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except (RuntimeError, OSError) as error:
+    except (RuntimeError, OSError, subprocess.CalledProcessError) as error:
         print(f"setup: {error}", file=sys.stderr)
         raise SystemExit(1)
