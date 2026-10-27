@@ -1,6 +1,7 @@
 """Exercise Bash startup fragments without a SOPS key or real home directory."""
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -22,8 +23,10 @@ class ShellTests(unittest.TestCase):
             self.env.pop(name, None)
 
     def bash(self, script):
-        return subprocess.run(["/bin/bash", "--noprofile", "--norc", "-c", script],
-                              env=self.env, text=True, capture_output=True, check=True).stdout
+        result = subprocess.run(["/bin/bash", "--noprofile", "--norc", "-c", script],
+                                env=self.env, text=True, capture_output=True, check=True)
+        self.assertEqual(result.stderr, "")
+        return result.stdout
 
     def test_paths_are_repeatable_and_local_bin_wins(self):
         paths = ROOT / "shell/paths.sh"
@@ -39,13 +42,18 @@ class ShellTests(unittest.TestCase):
     def test_container_install_is_repeatable_and_shell_only(self):
         bashrc = self.home / ".bashrc"
         bashrc.write_text('case $- in *i*) ;; *) return;; esac\n')
-        installer = ROOT / "shell/install-container.sh"
+        mounted_shell = self.home / "mounted-shell"
+        shutil.copytree(ROOT / "shell", mounted_shell)
+        self.assertFalse((self.home / "profile.sh").exists())
+        installer = mounted_shell / "install-container.sh"
         for _ in range(2):
             subprocess.run(["/bin/bash", str(installer)], env=self.env,
                            text=True, capture_output=True, check=True)
         self.assertEqual(bashrc.read_text().count('# >>> dev-env shell'), 1)
         self.assertEqual((self.home / ".profile").read_text().count('# >>> dev-env shell'), 1)
         for rc in (bashrc, self.home / ".profile"):
+            self.assertNotIn("profile.sh", rc.read_text())
+            self.assertNotIn("envtool", rc.read_text())
             output = self.bash(f'source "{rc}"; printf "%s\\n" "$PATH"')
             self.assertEqual(output.splitlines()[0].split(":")[0],
                              str(self.home / ".local/bin"))
