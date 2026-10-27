@@ -11,6 +11,7 @@ This mapping does not import You-Thon's application test policy.
 | Bash PATH, aliases, and startup-file behavior | `tests/test_shell.py` | `ShellTests` execute Bash with a temporary `HOME`. |
 | Setup and encrypted envtool behavior | `tests/test_scripts.py` | `ScriptTests` copy scripts into a temporary repository and use a temporary SOPS identity. |
 | Sourced `profile.sh` integration | `tests/test_scripts.py` | `ScriptTests` copy the profile, envtool, and shell fragments together before sourcing them. |
+| Installed skill and agent bodies | `tests/test_skills.py` | `SkillTests` read the Markdown and check frontmatter, links, and consumer values. |
 
 Review the changed `tests/*.py` against the changed Bash/Python files. Check
 that each test exercises the relevant command or sourced file, isolates its

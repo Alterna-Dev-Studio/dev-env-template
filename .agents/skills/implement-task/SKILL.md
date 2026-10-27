@@ -77,7 +77,7 @@ timeout 590 python3 -m unittest discover -s tests -v; echo "exit=$?"
 ```
 Never wait with a `kill -0 $(pgrep -f ...)` loop — `pgrep -f` matches the loop's own shell and never exits (see `AGENTS.md` "Process Hygiene").
 
-Read the unittest output for pass/fail; there are no `test-results/*.xml` files. Fix every failure, then re-run the suite to verify.
+Read the unittest output for pass/fail; there are no JUnit XML result files. Fix every failure, then re-run the suite to verify.
 
 **If you believe a failure is unrelated to your changes**, you MUST follow the Test Failure Triage Protocol in `references/test-failure-triage.md` before dismissing it.
 

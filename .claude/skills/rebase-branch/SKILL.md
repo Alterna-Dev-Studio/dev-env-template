@@ -250,7 +250,7 @@ If a check fails:
 
 ### 6c. Run tests
 
-Run `timeout 590 python3 -m unittest discover -s tests -v` in the foreground and read the unittest output for pass/fail (there are no `test-results/*.xml` files). See [docs/testing-workflow.md](../../../docs/testing-workflow.md); this repository has no CI gate, so this local run is the gate.
+Run `timeout 590 python3 -m unittest discover -s tests -v` in the foreground and read the unittest output for pass/fail (there are no JUnit XML result files). See [docs/testing-workflow.md](../../../docs/testing-workflow.md); this repository has no CI gate, so this local run is the gate.
 
 If tests fail:
 1. You MUST follow the Test Failure Triage Protocol in `.claude/skills/shared/test-failure-triage.md` to determine whether the failure is due to the rebase resolution or a pre-existing issue. Do NOT assume a failure is pre-existing without verifying on the base branch.
