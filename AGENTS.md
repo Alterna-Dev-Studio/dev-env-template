@@ -24,14 +24,13 @@ application code, no F#, no .NET, and no CI test gate. See [README.md](README.md
 - Helpers: `scripts/taiga-story.sh <ref> [project] [--issue|--epic] [--with-tasks]` (default
   project 4) and `scripts/taiga-comment.sh <item-id> "<comment>" [--issue]`. Both read
   `TAIGA_API_URL`, `TAIGA_USERNAME`, `TAIGA_PASSWORD` from the environment and never print them.
-- MCP: `.mcp.json` launches pytaiga-mcp in **full** mode (`taiga-mcp full`, stdio) for
-  Claude Code in this repository, overriding the user-level `workflow` server. The installed
+- MCP: `.mcp.json` launches `scripts/taiga-mcp full` (pytaiga-mcp in **full** mode, stdio)
+  for Claude Code in this repository, overriding any user-level `workflow` server. The installed
   Claude skill bodies and their `mcp__taiga-py__*` grants are written against full mode
   (`get_user_story`, `get_user_story_statuses`, `list_epics`, ...), so the names match as is.
-  Codex already runs full mode globally. The launcher lives in the personal `jon-dev-env`
-  checkout and decrypts Taiga credentials from its SOPS profile; a fresh clone of this template
-  must point `.mcp.json` at its own launcher. Check `get_default_session` first and prefer
-  `login()` without explicit credentials.
+  The launcher decrypts Taiga credentials from this repository's SOPS profile and needs the
+  pytaiga-mcp checkout from `scripts/setup-taiga-mcp`. Check `get_default_session` first and
+  prefer `login()` without explicit credentials.
 - Merge automation (`taiga-update-on-merge.sh`, `taiga-sync.yml`) is **not** installed here.
   The `close-tasks-on-merge` and `mark-done-on-merge` labels and tags are recorded for
   planning only and have no effect on merge.

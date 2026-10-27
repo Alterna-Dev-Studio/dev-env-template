@@ -2,7 +2,7 @@
   "mcpServers": {
     "taiga-py": {
       "type": "stdio",
-      "command": "/home/jon/work/utils/jon-dev-env/scripts/taiga-mcp",
+      "command": "scripts/taiga-mcp",
       "args": ["full"]
     }
   }

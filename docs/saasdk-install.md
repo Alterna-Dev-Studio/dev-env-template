@@ -255,8 +255,11 @@ Unified diffs:
 ```
 
 Consumer-owned files added for the skills' required reads: `AGENTS.md` (with
-`CLAUDE.md` as a symlink to it), `docs/testing-workflow.md`, and `.mcp.json`,
-which launches pytaiga-mcp in full mode for Claude Code in this repository. The pilot-only
+`CLAUDE.md` as a symlink to it), `docs/testing-workflow.md`, `.mcp.json`, and the
+`scripts/taiga-mcp` and `scripts/setup-taiga-mcp` launcher pair (from the
+personal `jon-dev-env` copy, with the checkout path made overridable through
+`PYTAIGA_MCP_HOME`). `.mcp.json` runs `scripts/taiga-mcp full` for Claude Code
+in this repository; `tests/test_scripts.py` covers the launcher. The pilot-only
 framing was removed from `docs/testing-strategy.md` and
 `docs/testing-conventions.md`.
 
@@ -267,8 +270,9 @@ framing was removed from `docs/testing-strategy.md` and
   `set_story_status`); Codex runs `full` mode (107 id-based CRUD tools). The
   SAASDK Claude bodies and their `mcp__taiga-py__*` grants are written against
   `full`. The repo-level `.mcp.json` therefore launches `taiga-mcp full` so the
-  names match without porting the bodies. The launcher path is personal
-  (`jon-dev-env`); a fresh clone must supply its own.
+  names match without porting the bodies. The launcher is this repository's
+  own `scripts/taiga-mcp` (with `scripts/setup-taiga-mcp` to create the
+  pytaiga-mcp checkout), so a fresh clone needs no personal path.
 - `.claude/skills/shared/merge-side-effects.md` and
   `.claude/skills/shared/taiga-pagination.md` are byte-identical and still
   show You-Thon status IDs (14, 17, 18) and `project_id=3` in examples.
@@ -342,6 +346,14 @@ Claude full-mode smoke through the repo `.mcp.json` (`--strict-mcp-config
   `get_user_story_by_ref(project_id=4, ref=2467)` returned "Make
   dev-env-template shell setup portable across hosts and devcontainers",
   status In progress. No write tool was granted; exit 0.
+- Repo-relative launcher: the template checkout holds no vault, so
+  `scripts/taiga-mcp full` here exits 1 with "Missing encrypted Taiga
+  settings in profile". In a throwaway copy of this branch with a private
+  `secrets/` and `.sops.yaml` added, the same `.mcp.json` started the full
+  server, auto-authenticated, and `get_project_by_slug("alterna-dev-studio")`
+  returned project 4; the copy and its vault were deleted afterwards.
+  `tests/test_scripts.py` covers the launcher against a fake checkout.
+
 
 The full `analyze-story` and `implement-story` write paths (Taiga mutation,
 branch, PR) were not exercised by this install.
