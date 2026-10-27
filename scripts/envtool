@@ -129,7 +129,7 @@ def initialize():
     if not path_for("profile").exists():
         encrypt("profile", {})
     decrypt("profile")
-    print(f"Initialized SOPS for {ROOT}; back up {KEY_FILE} securely.")
+    print(f"Initialized SOPS for {ROOT}.")
 
 
 def main():

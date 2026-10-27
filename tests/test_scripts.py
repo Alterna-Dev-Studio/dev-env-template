@@ -26,9 +26,10 @@ class ScriptTests(unittest.TestCase):
         for name in ("envtool", "setup", "taiga-mcp"):
             shutil.copy2(ROOT / "scripts" / name, self.repo / "scripts" / name)
         shutil.copy2(ROOT / "profile.sh", self.repo / "profile.sh")
+        shutil.copy2(ROOT / ".envrc", self.repo / ".envrc")
         shutil.copytree(ROOT / "shell", self.repo / "shell")
         self.env = {key: value for key, value in os.environ.items()
-                    if not key.startswith(("SOPS_", "XDG_CONFIG_HOME", "TAIGA_"))}
+                    if not key.startswith(("SOPS_", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "TAIGA_"))}
         self.env["HOME"] = str(self.home)
         self.key = self.home / ".config/sops/age/keys.txt"
         self.bashrc = self.home / ".bashrc"
@@ -66,6 +67,23 @@ class ScriptTests(unittest.TestCase):
         self.assertLess(source, hook)
         self.run_script("setup")
         self.assertEqual(self.bashrc.read_text(), first)
+
+    def test_setup_allows_the_clone_envrc(self):
+        allow = self.home / ".local/share/direnv/allow"
+        for _ in range(2):
+            self.run_script("setup")
+            records = list(allow.iterdir())
+            self.assertEqual(len(records), 1)
+            self.assertIn(str(self.repo / ".envrc"), records[0].read_text())
+
+    def test_setup_ends_with_key_backup_reminder(self):
+        result = self.run_script("setup")
+        last = result.stdout.splitlines()[-2:]
+        self.assertIn(str(self.key), last[0])
+        self.assertIn("Back it up", last[1])
+        secret = next(line for line in self.key.read_text().splitlines()
+                      if line.startswith("AGE-SECRET-KEY-"))
+        self.assertNotIn(secret, result.stdout + result.stderr)
 
     def test_profile_line_goes_before_existing_direnv_hook(self):
         self.bashrc.write_text('alias ll="ls -l"\neval "$(direnv hook bash)"\nexport EDITOR=vim')

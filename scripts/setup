@@ -8,6 +8,7 @@ import re
 import runpy
 import shlex
 import shutil
+import subprocess
 import sys
 import tempfile
 
@@ -113,6 +114,16 @@ def prompt_missing():
         print("Still missing: " + ", ".join(skipped) + ". " + hint)
 
 
+def allow_envrc():
+    direnv = tool["locate"]("direnv")
+    if direnv is None:
+        return
+    result = subprocess.run([direnv, "allow", str(ROOT / ".envrc")], cwd=ROOT,
+                            text=True, capture_output=True)
+    if result.returncode:
+        raise RuntimeError(f"direnv allow failed: {result.stderr.strip()}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--migrate-bashrc", nargs="+", metavar="NAME", default=[],
@@ -146,6 +157,10 @@ def main():
         rewrite_loginrc()
         print(f"Updated ~/.bashrc and {LOGINRC} to source the development profile.")
     prompt_missing()
+    allow_envrc()
+    print(f"Age identity: {tool['KEY_FILE']}")
+    print("Back it up now: anyone with it can decrypt the vault, and losing it makes the vault unrecoverable.")
+
 
 if __name__ == "__main__":
     try:
