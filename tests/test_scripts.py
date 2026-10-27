@@ -191,12 +191,16 @@ class ScriptTests(unittest.TestCase):
 
     def test_profile_exports_values_in_bash(self):
         self.run_script("setup")
-        self.store("profile", {"FOO": "it's here", "DEV_ENV_HOME": "/stale/clone"})
+        self.store("profile", {"FOO": "it's here", "DEV_ENV_HOME": "/stale/clone",
+                               "_dev_env_root": "/stale/root"})
         result = subprocess.run(["bash", "-c", f'source {self.repo}/profile.sh; printf %s "$FOO"'],
                                 env=self.env, text=True, capture_output=True, check=True)
         self.assertEqual(result.stdout, "it's here")
         self.assertEqual(result.stderr, "")
         result = subprocess.run(["bash", "-c", f'source {self.repo}/profile.sh; printf %s "$DEV_ENV_HOME"'],
+                                env=self.env, text=True, capture_output=True, check=True)
+        self.assertEqual(result.stdout, str(self.repo))
+        result = subprocess.run(["bash", "-c", f'source {self.repo}/profile.sh; printf %s "$_DEV_ENV_PROFILE_LOADED"'],
                                 env=self.env, text=True, capture_output=True, check=True)
         self.assertEqual(result.stdout, str(self.repo))
 
