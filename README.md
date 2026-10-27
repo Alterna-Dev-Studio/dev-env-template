@@ -5,9 +5,10 @@ A small, reusable home for shared development-tool configuration. Secrets live i
 ## Quickstart
 
 ```bash
-gh repo create my-dev-env --template Alterna-Dev-Studio/dev-env-template --private --clone
-cd my-dev-env && ./scripts/setup
+bash <(curl -fsSL https://raw.githubusercontent.com/Alterna-Dev-Studio/dev-env-template/main/scripts/new-dev-env) my-dev-env
 ```
+
+The wrapper needs the GitHub CLI (`gh`), signed in. It runs `gh repo create my-dev-env --template Alterna-Dev-Studio/dev-env-template --private --clone`, waits for GitHub to finish copying the template files, then runs `cd my-dev-env && ./scripts/setup`. Name it `owner/name` to create the repository under an organization, and add setup options such as `--skip-taiga-mcp` after the name. Rather than piping a script from the web, you can run those two commands yourself.
 
 Setup checks for missing tools, creates the age key and encrypted profile, wires your Bash startup files, asks (hidden input) for the Taiga login, allows the clone's `.envrc`, installs the Taiga MCP server when `uv` is present (`--skip-taiga-mcp` opts out), and ends by printing the key file to back up. Then open a new Bash shell.
 
@@ -15,6 +16,7 @@ Setup checks for missing tools, creates the age key and encrypted profile, wires
 
 | Command | What it does |
 |---|---|
+| `./scripts/new-dev-env [name]` | Creates your private copy, clones it, and runs setup |
 | `./scripts/setup` | Installs the profile and creates the vault |
 | `./scripts/envtool set <scope> NAME` | Adds a vault value (hidden input) |
 | `./scripts/envtool edit <scope>` | Edits a scope in your editor |
