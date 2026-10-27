@@ -139,7 +139,7 @@ For each issue found:
 
 ### Step 5: Verify changes
 
-Run the affected test suites per `docs/testing-workflow.md`. Read `test-results/*.xml` for pass/fail status. If any test fails due to the review changes, fix it before proceeding.
+Run `timeout 590 python3 -m unittest discover -s tests -v` per `docs/testing-workflow.md` and read the unittest output for pass/fail status (there are no `test-results/*.xml` files here). If any test fails due to the review changes, fix it before proceeding.
 
 ### Step 6: Commit and document
 
