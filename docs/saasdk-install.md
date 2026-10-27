@@ -272,7 +272,10 @@ framing was removed from `docs/testing-strategy.md` and
   `full`. The repo-level `.mcp.json` therefore launches `taiga-mcp full` so the
   names match without porting the bodies. The launcher is this repository's
   own `scripts/taiga-mcp` (with `scripts/setup-taiga-mcp` to create the
-  pytaiga-mcp checkout), so a fresh clone needs no personal path.
+  pytaiga-mcp checkout), so a fresh clone needs no personal path. The launcher
+  uses `TAIGA_API_URL`, `TAIGA_USERNAME`, and `TAIGA_PASSWORD` from the
+  environment when all three are set and no scope is named, and decrypts a
+  vault scope otherwise, so a checkout without `secrets/` still connects.
 - `.claude/skills/shared/merge-side-effects.md` and
   `.claude/skills/shared/taiga-pagination.md` are byte-identical and still
   show You-Thon status IDs (14, 17, 18) and `project_id=3` in examples.

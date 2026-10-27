@@ -28,7 +28,7 @@ class ScriptTests(unittest.TestCase):
         shutil.copy2(ROOT / "shared-variables.txt", self.repo / "shared-variables.txt")
         shutil.copytree(ROOT / "shell", self.repo / "shell")
         self.env = {key: value for key, value in os.environ.items()
-                    if not key.startswith(("SOPS_", "XDG_CONFIG_HOME"))}
+                    if not key.startswith(("SOPS_", "XDG_CONFIG_HOME", "TAIGA_"))}
         self.env["HOME"] = str(self.home)
         self.key = self.home / ".config/sops/age/keys.txt"
         self.bashrc = self.home / ".bashrc"
@@ -145,6 +145,18 @@ class ScriptTests(unittest.TestCase):
         self.assertEqual(result.stdout.splitlines(),
                          [str(checkout), "https://taiga.example|u|p|stdio|"])
         self.assertEqual(result.stderr, "")
+        self.env.update({"TAIGA_API_URL": "env.example", "TAIGA_USERNAME": "eu", "TAIGA_PASSWORD": "ep"})
+        result = self.run_script("taiga-mcp", "full")
+        # Environment mode passes Pangolin settings through from the same environment.
+        self.assertEqual(result.stdout.splitlines()[1], "env.example|eu|ep|stdio|stale-host-value")
+        result = self.run_script("taiga-mcp", "full", "profile")
+        self.assertEqual(result.stdout.splitlines()[1], "https://taiga.example|u|p|stdio|")
+        for name in ("TAIGA_API_URL", "TAIGA_USERNAME", "TAIGA_PASSWORD"):
+            del self.env[name]
+        result = self.run_script("taiga-mcp", "full", "project/empty", check=False)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Missing Taiga settings", result.stderr)
+        self.assertNotIn("p", result.stdout)
         self.env["PYTAIGA_MCP_HOME"] = str(self.tmp / "absent")
         result = self.run_script("taiga-mcp", "full", check=False)
         self.assertEqual(result.returncode, 1)
