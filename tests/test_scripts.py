@@ -160,6 +160,9 @@ class ScriptTests(unittest.TestCase):
                                 env=self.env, text=True, capture_output=True, check=True)
         self.assertEqual(result.stdout, "it's here")
         self.assertEqual(result.stderr, "")
+        result = subprocess.run(["bash", "-c", f'source {self.repo}/profile.sh; printf %s "$DEV_ENV_HOME"'],
+                                env=self.env, text=True, capture_output=True, check=True)
+        self.assertEqual(result.stdout, str(self.repo))
 
 
 if __name__ == "__main__":

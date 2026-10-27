@@ -20,11 +20,11 @@ If existing shared exports are already in `.bashrc` and present in the current s
 
 ## Project variables
 
-Add a project value with `./scripts/envtool set project/my-project STRIPE_SECRET_KEY`. In that project's `.envrc`, use:
+Add a project value with `./scripts/envtool set project/my-project STRIPE_SECRET_KEY`. `profile.sh` exports `DEV_ENV_HOME`, the directory of this clone, so project `.envrc` files never hardcode its location. In that project's `.envrc`, use:
 
 ```bash
-watch_file "$HOME/work/utils/jon-dev-env/secrets/project/my-project.enc.json"
-_dev_env_exports="$("$HOME/work/utils/jon-dev-env/scripts/envtool" export project/my-project)" || exit 1
+watch_file "$DEV_ENV_HOME/secrets/project/my-project.enc.json"
+_dev_env_exports="$("$DEV_ENV_HOME/scripts/envtool" export project/my-project)" || exit 1
 eval "$_dev_env_exports"; unset _dev_env_exports
 ```
 

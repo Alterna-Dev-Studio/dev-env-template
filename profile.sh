@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Source from ~/.bashrc or ~/.profile. Never prints secret values or writes plaintext files.
 _dev_env_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+export DEV_ENV_HOME="$_dev_env_root"
 source "$_dev_env_root/shell/paths.sh"
 if [[ $- == *i* ]]; then
   source "$_dev_env_root/shell/aliases.sh"
