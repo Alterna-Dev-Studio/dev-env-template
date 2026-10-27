@@ -16,6 +16,13 @@ tool = runpy.run_path(str(ROOT / "scripts/envtool"))
 
 # The repository's own Taiga helpers and MCP launcher cannot run without these.
 REQUIRED = ("TAIGA_API_URL", "TAIGA_USERNAME", "TAIGA_PASSWORD")
+# One install hint per required tool; README.md § Setup has the long form.
+TOOLS = {
+    "sops": "install the .deb from https://github.com/getsops/sops/releases, "
+            "or: go install github.com/getsops/sops/v3/cmd/sops@latest",
+    "age-keygen": "sudo apt install age, or: go install filippo.io/age/cmd/age-keygen@latest",
+    "direnv": "sudo apt install direnv",
+}
 SOURCE = f"[ -f {shlex.quote(str(ROOT / 'profile.sh'))} ] && source {shlex.quote(str(ROOT / 'profile.sh'))}\n"
 BASHRC = Path.home() / ".bashrc"
 LOGINRC = next((Path.home() / name for name in (".bash_profile", ".bash_login")
@@ -74,6 +81,13 @@ def rewrite_loginrc():
             os.unlink(temporary)
 
 
+def preflight():
+    missing = [name for name in TOOLS if tool["locate"](name) is None]
+    if missing:
+        raise RuntimeError("missing required tools:\n"
+                           + "\n".join(f"  {name}: {TOOLS[name]}" for name in missing))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--migrate-bashrc", nargs="+", metavar="NAME", default=[],
@@ -82,6 +96,7 @@ def main():
     for name in args.migrate_bashrc:
         if not re.fullmatch(r"[A-Z_][A-Z0-9_]*", name):
             raise RuntimeError(f"invalid variable name {name!r}")
+    preflight()
     tool["initialize"]()
     if args.migrate_bashrc:
         existing = BASHRC.read_text() if BASHRC.exists() else ""

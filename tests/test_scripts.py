@@ -34,7 +34,7 @@ class ScriptTests(unittest.TestCase):
 
     def run_script(self, *args, check=True):
         result = subprocess.run([str(self.repo / "scripts" / args[0]), *args[1:]], env=self.env,
-                                cwd=self.repo, text=True, capture_output=True)
+                                cwd=self.repo, stdin=subprocess.DEVNULL, text=True, capture_output=True)
         if check and result.returncode:
             self.fail(f"{args} failed: {result.stderr}")
         return result
@@ -77,15 +77,10 @@ class ScriptTests(unittest.TestCase):
 
     def test_missing_trailing_newline_is_not_joined(self):
         self.bashrc.write_text("export EDITOR=vim")
-        # A PATH without direnv: setup should then leave the hook out.
-        (self.home / "bin").mkdir()
-        for tool in ("python3", "sops", "age-keygen"):
-            os.symlink(shutil.which(tool), self.home / "bin" / tool)
-        self.env["PATH"] = str(self.home / "bin")
         self.run_script("setup")
         lines = self.bashrc.read_text().splitlines()
         self.assertEqual(lines[0], "export EDITOR=vim")
-        self.assertFalse(any("direnv" in line for line in lines))
+        self.assertTrue(any("profile.sh" in line for line in lines[1:]))
 
     def test_encrypt_uses_sops_config_not_first_local_identity(self):
         self.run_script("setup")
@@ -240,6 +235,42 @@ class HelpAndPreflightTests(unittest.TestCase):
         result = self.run_script("envtool", "init", "--help")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("called by setup", result.stdout)
+
+    def copy_repo(self):
+        repo = self.tmp / "repo"
+        (repo / "scripts").mkdir(parents=True)
+        for name in ("envtool", "setup"):
+            shutil.copy2(ROOT / "scripts" / name, repo / "scripts" / name)
+        shutil.copy2(ROOT / "profile.sh", repo / "profile.sh")
+        return repo
+
+    def run_setup_copy(self, repo):
+        return subprocess.run([str(repo / "scripts/setup")], env=self.env, cwd=repo,
+                              stdin=subprocess.DEVNULL, text=True, capture_output=True)
+
+    def test_setup_preflight_names_every_missing_tool_and_touches_nothing(self):
+        repo = self.copy_repo()
+        result = self.run_setup_copy(repo)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertTrue(result.stderr.startswith("setup: missing required tools:"), result.stderr)
+        for expected in ("sops:", "age-keygen:", "direnv:", "sudo apt install direnv",
+                         "getsops/sops/releases"):
+            self.assertIn(expected, result.stderr)
+        for name in (".config", ".bashrc", ".profile"):
+            self.assertFalse((self.home / name).exists(), name)
+        self.assertFalse((repo / ".sops.yaml").exists())
+        self.assertFalse((repo / "secrets").exists())
+
+    def test_setup_preflight_reports_only_the_absent_tools(self):
+        if not (shutil.which("sops") and shutil.which("age-keygen")):
+            self.skipTest("requires sops and age-keygen on the host")
+        for name in ("sops", "age-keygen"):
+            (self.tmp / "bin" / name).symlink_to(shutil.which(name))
+        result = self.run_setup_copy(self.copy_repo())
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("direnv:", result.stderr)
+        self.assertNotIn("sops:", result.stderr)
+        self.assertNotIn("age-keygen:", result.stderr)
 
 
 if __name__ == "__main__":
