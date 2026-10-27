@@ -8,17 +8,18 @@ You end up with your own private copy of this repository on GitHub, cloned to yo
 
 1. Install the [GitHub CLI](https://cli.github.com/) and sign in with `gh auth login`. Setup also needs `sops`, `age`, and `direnv`. If any are missing it stops and tells you how to install them ([details](docs/secrets.md#prerequisites)).
 2. Go to the folder that should hold your copy, for example `cd ~/work`.
-3. Run this, replacing `my-dev-env` with the name you want for your repository:
+3. Install the extension once, then create your copy. Replace `my-dev-env` with the name you want for your repository:
 
    ```bash
-   bash <(curl -fsSL https://raw.githubusercontent.com/Alterna-Dev-Studio/dev-env-template/main/scripts/new-dev-env) my-dev-env
+   gh extension install Alterna-Dev-Studio/gh-dev-env
+   gh dev-env my-dev-env
    ```
 
 4. Answer the prompts. Setup asks for your Taiga URL, username, and password, and the password is not shown as you type.
 5. Back up the key file that setup prints at the end. Without it you cannot decrypt your secrets.
 6. Open a new terminal. Your credentials and tool paths are now loaded.
 
-The command above makes a private repository under your GitHub account from this template, clones it into `./my-dev-env`, and runs `./scripts/setup` inside it. To use an organization, give `owner/name`. Setup options such as `--skip-taiga-mcp` go after the name. If you'd rather not run a script straight from the web, these two commands do the same thing:
+`gh dev-env` makes a private repository under your GitHub account from this template, clones it into `./my-dev-env`, and runs `./scripts/setup` inside it. To use an organization, give `owner/name`. Setup options such as `--skip-taiga-mcp` go after the name. Without the extension, these two commands do the same thing:
 
 ```bash
 gh repo create my-dev-env --template Alterna-Dev-Studio/dev-env-template --private --clone
@@ -31,7 +32,7 @@ Setup also adds a few lines to your Bash startup files, allows the clone's `.env
 
 | Command | What it does |
 |---|---|
-| `./scripts/new-dev-env [name]` | Creates your private copy, clones it, and runs setup |
+| `gh dev-env [name]` | Creates your private copy, clones it, and runs setup |
 | `./scripts/setup` | Installs the profile and creates the vault |
 | `./scripts/envtool set <scope> NAME` | Adds a vault value (hidden input) |
 | `./scripts/envtool edit <scope>` | Edits a scope in your editor |
