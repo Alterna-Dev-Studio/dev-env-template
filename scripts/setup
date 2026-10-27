@@ -7,7 +7,6 @@ from pathlib import Path
 import re
 import runpy
 import shlex
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -52,7 +51,7 @@ def rewrite_bashrc(remove_names=()):
                  if "# Keep direnv last" in line
                  or re.search(r"\bdirenv\s+(?:export|hook)\s+bash\b", line)), None)
     if hook is None:
-        lines += [COMMENT, SOURCE] + (DIRENV if shutil.which("direnv") else [])
+        lines += [COMMENT, SOURCE] + (DIRENV if tool["locate"]("direnv") else [])
     else:
         lines[hook:hook] = [COMMENT, SOURCE]
     result = "".join(lines)
@@ -129,11 +128,14 @@ def allow_envrc():
 def install_taiga_mcp(skip):
     if skip:
         return
-    if tool["locate"]("uv") is None:
+    uv = tool["locate"]("uv")
+    if uv is None:
         print(UV_NOTE)
         return
+    # The installer checks `command -v uv`, so put the located binary's directory on PATH.
+    env = {**os.environ, "PATH": str(Path(uv).parent) + os.pathsep + os.environ.get("PATH", "")}
     # Inherit stdout/stderr so uv's progress and the Codex registration line are visible.
-    subprocess.run([str(ROOT / "scripts/setup-taiga-mcp")], cwd=ROOT, check=True)
+    subprocess.run([str(ROOT / "scripts/setup-taiga-mcp")], cwd=ROOT, env=env, check=True)
 
 
 def main():
