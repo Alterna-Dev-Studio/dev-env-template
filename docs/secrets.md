@@ -53,13 +53,17 @@ Each scope is one encrypted JSON file of string values keyed by valid environmen
 
 | Command | What it does |
 |---|---|
-| `./scripts/envtool set <scope> NAME` | Reads the value with hidden input and re-encrypts the scope |
-| `./scripts/envtool edit <scope>` | Opens the scope in SOPS, which honors `$EDITOR`; creates the scope if missing |
-| `./scripts/envtool list <scope>` | Prints variable names only |
-| `./scripts/envtool export <scope>` | Prints `export NAME=value` lines; used by `profile.sh` and `.envrc` |
+| `dv set <scope> NAME` | Reads the value with hidden input and re-encrypts the scope |
+| `dv edit <scope>` | Opens the scope in SOPS, which honors `$EDITOR`; creates the scope if missing |
+| `dv list <scope>` | Prints variable names only |
+| `dv export <scope>` | Prints `export NAME=value` lines; used by `profile.sh` and `.envrc` |
 | `./scripts/envtool init` | Creates the identity, `.sops.yaml`, and empty profile; called by setup |
 
-`./scripts/envtool --help` documents every subcommand. Secret values are never printed by setup
+`dv` is `bin/dev-env`, a dispatcher that runs `scripts/envtool` with the same arguments, so
+`./scripts/envtool set <scope> NAME` from inside the clone is the same command. `dv` is on
+`PATH` only after a shell has loaded the profile ([shell-profile.md](shell-profile.md)), which is
+why `profile.sh` and `.envrc` files call `scripts/envtool` by path. `dv --help` and
+`./scripts/envtool --help` document every subcommand. Secret values are never printed by setup
 or `list`, and no plaintext file is written.
 
 ## Shared variables and scopes
@@ -72,7 +76,7 @@ The profile scope holds values every shell gets. The repository's own tooling ne
 | `GH_TOKEN` | `gh`, and the devcontainer example's `containerEnv` | Optional; `gh auth login` works instead |
 
 Add anything else your own tools read, such as package or API tokens, the same way. If you skip
-a prompt, add the value later with `./scripts/envtool set profile NAME`.
+a prompt, add the value later with `dv set profile NAME`.
 
 Choose a scope by who reads the value:
 
@@ -83,15 +87,15 @@ Choose a scope by who reads the value:
 - Use a project scope through direnv for values that differ per project or carry a large blast
   radius, such as a production Stripe key; it then exists only inside that project's directory.
 - When the same value shows up in several project scopes, move it:
-  `./scripts/envtool set profile NAME`, then remove it from each project with
-  `./scripts/envtool edit project/<project>`.
+  `dv set profile NAME`, then remove it from each project with
+  `dv edit project/<project>`.
 
 ## Migrating exports from .bashrc
 
 If `~/.bashrc` already exports values you want in the vault, run
 `./scripts/setup --migrate-bashrc NAME...` from a shell where they are set. It encrypts and
 verifies the named values, then removes only their `export` lines; other lines stay. Review the
-result with `./scripts/envtool list profile`.
+result with `dv list profile`.
 
 ## Never committed
 

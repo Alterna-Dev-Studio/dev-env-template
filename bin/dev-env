@@ -1,0 +1,54 @@
+#!/usr/bin/env python3
+"""One command for this checkout's scripts. Installed on PATH as `dev-env` and `dv`.
+
+Each subcommand runs the matching script under scripts/, which stays the real
+implementation, so absolute paths to those scripts keep working everywhere.
+"""
+import os
+from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parent.parent
+SCRIPTS = ROOT / "scripts"
+ENVTOOL = ("export", "set", "list", "edit", "init")
+COMMANDS = (
+    ("export <scope>", "print `export NAME=value` lines for a vault scope"),
+    ("set <scope> NAME", "store one vault value, read with hidden input"),
+    ("list <scope>", "print the variable names in a scope, never the values"),
+    ("edit <scope>", "open a scope in sops, which honors $EDITOR"),
+    ("setup [options]", "install the profile and create the vault (./scripts/setup)"),
+    ("taiga-mcp install", "clone pytaiga-mcp and sync its venv (./scripts/setup-taiga-mcp)"),
+    ("taiga-mcp workflow|full [scope]", "launch the Taiga MCP server over stdio"),
+)
+
+
+def usage(stream):
+    name = Path(sys.argv[0]).name or "dev-env"
+    width = max(len(command) for command, _ in COMMANDS)
+    print(f"usage: {name} COMMAND [ARGS...]\n\nCommands:", file=stream)
+    for command, text in COMMANDS:
+        print(f"  {command:<{width}}  {text}", file=stream)
+    print(f"\nScopes are `profile` or `project/<name>`. Each command runs the matching script in\n"
+          f"{SCRIPTS}; those scripts work on their own too.", file=stream)
+
+
+def main(argv):
+    if not argv or argv[0] in ("-h", "--help", "help"):
+        usage(sys.stdout)
+        return 0
+    command, rest = argv[0], argv[1:]
+    if command in ENVTOOL:
+        target, args = SCRIPTS / "envtool", [command, *rest]
+    elif command in ("setup", "setup-taiga-mcp", "taiga-mcp"):
+        target, args = SCRIPTS / command, rest
+        if command == "taiga-mcp" and rest[:1] == ["install"]:
+            target, args = SCRIPTS / "setup-taiga-mcp", rest[1:]
+    else:
+        print(f"{Path(sys.argv[0]).name}: unknown command '{command}'\n", file=sys.stderr)
+        usage(sys.stderr)
+        return 2
+    os.execv(str(target), [str(target), *args])
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

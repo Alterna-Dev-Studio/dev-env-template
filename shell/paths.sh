@@ -19,6 +19,10 @@ export VOLTA_FEATURE_PNPM="${VOLTA_FEATURE_PNPM:-1}"
 export PNPM_HOME="${PNPM_HOME:-$HOME/.local/share/pnpm}"
 export FLYCTL_INSTALL="${FLYCTL_INSTALL:-$HOME/.fly}"
 
+# This checkout's own commands, `dev-env` and `dv`, live in bin/ next to shell/. An opted-in
+# devcontainer mounts only shell/, so there bin/ does not exist and the entry is skipped.
+_dev_env_bin="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)/bin"
+
 # Add in reverse order so user scripts in ~/.local/bin win, including Herdr and Collie.
 _dev_env_prepend_path /go/bin
 _dev_env_prepend_path /usr/local/go/bin
@@ -27,6 +31,8 @@ _dev_env_prepend_path "$HOME/go/bin"
 _dev_env_prepend_path "$FLYCTL_INSTALL/bin"
 _dev_env_prepend_path "$PNPM_HOME"
 _dev_env_prepend_path "$VOLTA_HOME/bin"
+_dev_env_prepend_path "$_dev_env_bin"
 _dev_env_prepend_path "$HOME/bin"
 _dev_env_prepend_path "$HOME/.local/bin"
 unset -f _dev_env_prepend_path
+unset _dev_env_bin

@@ -34,14 +34,16 @@ Setup also adds a few lines to your Bash startup files, allows the clone's `.env
 |---|---|
 | `gh dev-env [name]` | Creates your private copy, clones it, and runs setup |
 | `./scripts/setup` | Installs the profile and creates the vault |
-| `./scripts/envtool set <scope> NAME` | Adds a vault value (hidden input) |
-| `./scripts/envtool edit <scope>` | Edits a scope in your editor |
-| `./scripts/envtool list <scope>` | Lists variable names only |
-| `./scripts/setup-taiga-mcp` | Installs the Taiga MCP server |
+| `dv set <scope> NAME` | Adds a vault value (hidden input) |
+| `dv edit <scope>` | Edits a scope in your editor |
+| `dv list <scope>` | Lists variable names only |
+| `dv taiga-mcp install` | Installs the Taiga MCP server |
 | `./scripts/taiga-mcp` | Launches the Taiga MCP server |
 | `./scripts/taiga-story.sh` | Fetches a Taiga story |
 | `./scripts/taiga-comment.sh` | Comments on a Taiga item |
 | `python3 -m unittest discover -s tests -v` | Runs the tests |
+
+`dv` (also `dev-env`) is on `PATH` in every shell that has loaded the profile and runs the scripts in `scripts/` from any directory; `dv --help` lists its commands. Before setup has run, or in a script that may start without the profile, call the scripts by path instead.
 
 ## Secrets and scopes
 
@@ -49,11 +51,11 @@ Values every shell needs, such as your Taiga login, go in the profile scope. Val
 
 ## Shell profile
 
-Setup adds guarded source lines to your Bash startup files so each shell gets the credentials, a tidy `PATH` with `~/.local/bin` first, and your optional aliases. Details: [docs/shell-profile.md](docs/shell-profile.md).
+Setup adds guarded source lines to your Bash startup files so each shell gets the credentials, a tidy `PATH` with `~/.local/bin` first and this clone's `bin/` (`dv`, `dev-env`) after your own directories, and your optional aliases. Details: [docs/shell-profile.md](docs/shell-profile.md).
 
 ## Project variables
 
-Store a project value with `./scripts/envtool set project/my-project NAME`, then load it from that project's `.envrc` and run `direnv allow`:
+Store a project value with `dv set project/my-project NAME`, then load it from that project's `.envrc` and run `direnv allow`. The `.envrc` calls the script by path because direnv may run before any shell has put `dv` on `PATH`:
 
 ```bash
 watch_file "$DEV_ENV_HOME/secrets/project/my-project.enc.json"

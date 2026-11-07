@@ -5,7 +5,7 @@
 
 ## Install
 
-`./scripts/setup-taiga-mcp` clones
+`dv taiga-mcp install` (the script is `./scripts/setup-taiga-mcp`) clones
 [pytaiga-mcp](https://github.com/Alterna-Dev-Studio/pytaiga-mcp) into
 `~/work/utils/pytaiga-mcp` and runs `uv sync --frozen` there. It requires `git` and `uv`.
 
@@ -25,6 +25,8 @@
 ## Launch
 
 `scripts/taiga-mcp workflow|full [profile|project/NAME]` starts the server over stdio.
+`dv taiga-mcp workflow|full [scope]` runs the same launcher from any directory; the client
+registrations below keep the script path because MCP clients start it without a shell profile.
 
 - With no scope named and `TAIGA_API_URL`, `TAIGA_USERNAME`, and `TAIGA_PASSWORD` all set in
   the environment, it uses them.

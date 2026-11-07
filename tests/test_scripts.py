@@ -30,6 +30,7 @@ class ScriptTests(unittest.TestCase):
         shutil.copy2(ROOT / "profile.sh", self.repo / "profile.sh")
         shutil.copy2(ROOT / ".envrc", self.repo / ".envrc")
         shutil.copytree(ROOT / "shell", self.repo / "shell")
+        shutil.copytree(ROOT / "bin", self.repo / "bin", symlinks=True)
         self.env = {key: value for key, value in os.environ.items()
                     if not key.startswith(("SOPS_", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "TAIGA_"))}
         self.env["HOME"] = str(self.home)
@@ -196,6 +197,36 @@ class ScriptTests(unittest.TestCase):
         result = self.run_script("taiga-mcp", check=False)
         self.assertEqual(result.returncode, 1)
         self.assertIn("usage:", result.stderr)
+
+    def run_dv(self, *args, check=True):
+        """Run the dispatcher through its `dv` symlink from outside the checkout."""
+        result = subprocess.run([str(self.repo / "bin/dv"), *args], env=self.env, cwd=self.home,
+                                stdin=subprocess.DEVNULL, text=True, capture_output=True)
+        if check and result.returncode:
+            self.fail(f"dv {args} failed: {result.stderr}")
+        return result
+
+    def test_dv_dispatches_to_the_scripts_from_any_directory(self):
+        self.run_script("setup")
+        self.store("profile", {"FOO": "bar"})
+        self.assertEqual(self.run_dv("export", "profile").stdout, "export FOO=bar\n")
+        self.assertEqual(self.run_dv("list", "profile").stdout.split(), ["FOO"])
+        self.assertIn("--skip-taiga-mcp", self.run_dv("setup", "--help").stdout)
+        result = self.run_dv("taiga-mcp", check=False)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("usage: taiga-mcp workflow|full", result.stderr)
+        result = self.run_dv("bogus", check=False)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("dv: unknown command 'bogus'", result.stderr)
+        self.assertIn("usage: dv COMMAND", result.stderr)
+        self.assertEqual(result.stdout, "")
+
+    def test_dv_taiga_mcp_install_runs_setup_taiga_mcp(self):
+        checkout, _, uv_log, codex_log = self.fake_taiga_mcp()
+        result = self.run_dv("taiga-mcp", "install")
+        self.assertEqual(uv_log.read_text(), f"sync --frozen --directory {checkout}\n")
+        self.assertEqual(codex_log.read_text(), f"mcp add taiga-py -- {self.repo / 'scripts/taiga-mcp'} full\n")
+        self.assertIn("Registered taiga-py for Codex", result.stdout)
 
     def test_migrate_bashrc_moves_only_named_exports(self):
         self.bashrc.write_text("export FOO=1\nexport BAR=2\nexport BAZ=3\n")
@@ -386,6 +417,20 @@ class HelpAndPreflightTests(unittest.TestCase):
         result = self.run_script("envtool", "init", "--help")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("called by setup", result.stdout)
+
+    def test_dev_env_and_dv_help_list_every_command(self):
+        for name in ("dev-env", "dv"):
+            result = subprocess.run([str(ROOT / "bin" / name), "--help"], env=self.env,
+                                    stdin=subprocess.DEVNULL, text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(result.stdout.startswith(f"usage: {name} COMMAND"), result.stdout)
+            for command in ("export", "set", "list", "edit", "setup", "taiga-mcp install",
+                            "taiga-mcp workflow|full"):
+                self.assertIn(command, result.stdout)
+            self.assertNotIn("init", result.stdout)
+            bare = subprocess.run([str(ROOT / "bin" / name)], env=self.env, stdin=subprocess.DEVNULL,
+                                  text=True, capture_output=True)
+            self.assertEqual((bare.returncode, bare.stdout), (0, result.stdout))
 
     def test_setup_help_lists_skip_flag(self):
         result = self.run_script("setup", "--help")
