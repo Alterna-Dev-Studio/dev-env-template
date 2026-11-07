@@ -51,6 +51,10 @@ Each scope is one encrypted JSON file of string values keyed by valid environmen
 | `profile` | `secrets/profile.enc.json` |
 | `project/<name>` | `secrets/project/<name>.enc.json` (name uses letters, digits, `_`, `-`) |
 
+Name a credential scope after what it holds, `<service>-<host>-<account>`, for example
+`project/taiga-backlog-ci-bot`. A scope named after the project that first needed it hides the
+fact that two projects share one account, and the second scope ends up a duplicate.
+
 | Command | What it does |
 |---|---|
 | `dv set <scope> NAME` | Reads the value with hidden input and re-encrypts the scope |
