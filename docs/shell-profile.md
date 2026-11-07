@@ -49,9 +49,13 @@ Sourced in Bash login and interactive shells, and inside opted-in devcontainers
 
 - It prepends directories that exist, never duplicating a PATH entry. It adds them in reverse
   order so the final order puts `~/.local/bin` first (where Herdr and Collie live), then
-  `~/bin`, `$VOLTA_HOME/bin`, `$PNPM_HOME`, `$FLYCTL_INSTALL/bin`, `~/go/bin`,
-  `~/.dotnet/tools`, `/usr/local/go/bin`, and `/go/bin`. A directory that does not exist is
-  skipped.
+  `~/bin`, this clone's `bin/`, `$VOLTA_HOME/bin`, `$PNPM_HOME`, `$FLYCTL_INSTALL/bin`,
+  `~/go/bin`, `~/.dotnet/tools`, `/usr/local/go/bin`, and `/go/bin`. A directory that does not
+  exist is skipped.
+- The clone's `bin/` holds `dev-env` and its `dv` symlink, one command that runs the scripts in
+  `scripts/` by subcommand (`dv --help` lists them). It sits after your own directories so a
+  personal script named `dv` still wins, and it is found relative to `paths.sh`, so a devcontainer
+  that mounts only `shell/` has no `bin/` and gets no entry.
 - It sets each of these only when it is not already set: `VOLTA_HOME` (`~/.volta`),
   `VOLTA_FEATURE_PNPM` (`1`), `PNPM_HOME` (`~/.local/share/pnpm`), and `FLYCTL_INSTALL`
   (`~/.fly`).

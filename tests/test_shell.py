@@ -39,6 +39,16 @@ class ShellTests(unittest.TestCase):
         self.assertEqual(volta, str(self.home / ".volta"))
         self.assertEqual(pnpm, str(self.home / ".local/share/pnpm"))
 
+    def test_checkout_bin_follows_the_user_dirs_on_path(self):
+        paths = ROOT / "shell/paths.sh"
+        output = self.bash(f'source "{paths}"; source "{paths}"; printf "%s\\n" "$PATH"')
+        entries = output.strip().split(":")
+        self.assertEqual(entries.count(str(ROOT / "bin")), 1)
+        self.assertLess(entries.index(str(self.home / ".local/bin")), entries.index(str(ROOT / "bin")))
+        self.assertLess(entries.index(str(self.home / "bin")), entries.index(str(ROOT / "bin")))
+        self.assertLess(entries.index(str(ROOT / "bin")), entries.index(str(self.home / ".volta/bin")))
+        self.assertEqual(self.bash(f'source "{paths}"; printf "%s" "${{_dev_env_bin-unset}}"'), "unset")
+
     def test_container_install_is_repeatable_and_shell_only(self):
         bashrc = self.home / ".bashrc"
         bashrc.write_text('case $- in *i*) ;; *) return;; esac\n')
