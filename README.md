@@ -1,53 +1,59 @@
 # Development environment template
 
-A small, reusable home for shared development-tool configuration. Secrets live in SOPS-encrypted JSON; the age identity stays outside Git. `profile.sh` sources portable PATH and optional alias fragments, then loads shared credentials. Project `.envrc` files can load additional encrypted values.
+A small, reusable home for shared development-tool configuration. Secrets live in SOPS-encrypted JSON and the age key stays outside Git. Your shell loads shared credentials and tool paths on startup, and project `.envrc` files can load more.
 
 ## Quickstart
+
+You end up with your own private copy of this repository on GitHub, cloned to your machine and set up.
+
+1. Install the [GitHub CLI](https://cli.github.com/) and sign in with `gh auth login`. Setup also needs `sops`, `age`, and `direnv`. If any are missing it stops and tells you how to install them ([details](docs/secrets.md#prerequisites)).
+2. Go to the folder that should hold your copy, for example `cd ~/work`.
+3. Install the extension once, then create your copy. Replace `my-dev-env` with the name you want for your repository:
+
+   ```bash
+   gh extension install Alterna-Dev-Studio/gh-dev-env
+   gh dev-env my-dev-env
+   ```
+
+4. Answer the prompts. Setup asks for your Taiga URL, username, and password, and the password is not shown as you type.
+5. Back up the key file that setup prints at the end. Without it you cannot decrypt your secrets.
+6. Open a new terminal. Your credentials and tool paths are now loaded.
+
+`gh dev-env` makes a private repository under your GitHub account from this template, clones it into `./my-dev-env`, and runs `./scripts/setup` inside it. To use an organization, give `owner/name`. Setup options such as `--skip-taiga-mcp` go after the name. Without the extension, these two commands do the same thing:
 
 ```bash
 gh repo create my-dev-env --template Alterna-Dev-Studio/dev-env-template --private --clone
 cd my-dev-env && ./scripts/setup
 ```
 
-Setup checks for `sops`, `age-keygen`, and `direnv`, creates the age identity and encrypted profile, wires the Bash startup files, prompts (hidden input) for the three [required variables](#shared-variables), allows the clone's `.envrc` with direnv, installs the Taiga MCP server when `uv` is present (`--skip-taiga-mcp` opts out), and ends by printing the key file to back up. Then open a new Bash shell. Everything below explains what setup did and how to add project-scoped secrets.
+Setup also adds a few lines to your Bash startup files, allows the clone's `.envrc`, and installs the Taiga MCP server if `uv` is present. Running it again is safe.
 
-## Setup
+## Commands
 
-Requirements: Bash, Python 3, `direnv`, `sops` (3.9 or newer), and `age-keygen`. On Debian or Ubuntu, `sudo apt install direnv age` covers direnv and age; install SOPS from the `.deb` on its [releases page](https://github.com/getsops/sops/releases) and compare its SHA-256 with the digest GitHub shows for that file (the release checksum list omits packages). With Go, `go install github.com/getsops/sops/v3/cmd/sops@latest` and `go install filippo.io/age/cmd/age-keygen@latest` also work; the scripts find binaries in `~/go/bin` too.
+| Command | What it does |
+|---|---|
+| `gh dev-env [name]` | Creates your private copy, clones it, and runs setup |
+| `./scripts/setup` | Installs the profile and creates the vault |
+| `./scripts/envtool set <scope> NAME` | Adds a vault value (hidden input) |
+| `./scripts/envtool edit <scope>` | Edits a scope in your editor |
+| `./scripts/envtool list <scope>` | Lists variable names only |
+| `./scripts/setup-taiga-mcp` | Installs the Taiga MCP server |
+| `./scripts/taiga-mcp` | Launches the Taiga MCP server |
+| `./scripts/taiga-story.sh` | Fetches a Taiga story |
+| `./scripts/taiga-comment.sh` | Comments on a Taiga item |
+| `python3 -m unittest discover -s tests -v` | Runs the tests |
 
-The age identity is read from `$SOPS_AGE_KEY_FILE`, else `$XDG_CONFIG_HOME/sops/age/keys.txt`, else `~/.config/sops/age/keys.txt`, matching SOPS. Encryption always uses the recipients in `.sops.yaml`, so the key file may hold other identities too. To let another key decrypt the vault, add it to the `age:` list in `.sops.yaml` (comma-separated) and run `sops updatekeys` on each file under `secrets/`.
+## Secrets and scopes
 
-1. Create a private repository from this GitHub template and clone it.
-2. Run `./scripts/setup`. It first checks the prerequisites and names any missing tool with an install hint before creating anything. It then creates `~/.config/sops/age/keys.txt`, `.sops.yaml`, and an encrypted profile, then adds guarded source lines to `~/.bashrc` and the Bash login file (`~/.profile` unless `~/.bash_profile` or `~/.bash_login` exists). It adds the direnv hook if `.bashrc` lacks one, after the profile source, and names any [required variable](#shared-variables) the profile still lacks.
-3. Back up the age identity securely; setup prints its path. Anyone with that file can decrypt the vault; losing it makes the vault unrecoverable.
-4. If you skipped a prompt, add the value later with `./scripts/envtool set profile NAME` (input is hidden), or use `./scripts/envtool edit profile`. `./scripts/envtool --help` documents every subcommand.
-5. Start a new Bash shell. `./scripts/envtool list profile` displays names only.
+Values every shell needs, such as your Taiga login, go in the profile scope. Values that differ per project or are risky if leaked go in a project scope. Back up the age key setup prints: losing it makes the vault unrecoverable. Details: [docs/secrets.md](docs/secrets.md).
 
-If `.bashrc` already exports values you want in the vault, run `./scripts/setup --migrate-bashrc NAME...` from a shell where they are set. It encrypts and verifies the named values before removing their export lines; other exports are left alone. Review the encrypted variable names with `envtool list`; secret values are never printed by setup.
+## Shell profile
 
-`shell/paths.sh` adds existing user tool directories without duplicating PATH entries, keeping `~/.local/bin` first for Herdr and Collie. It sets Volta, pnpm, and Fly home variables. Put personal interactive Bash aliases in `shell/aliases.sh` in your private copy. Keep machine-specific display, SSH relay, Docker, and system installation settings in the machine bootstrap. If you previously set the same portable paths or aliases in `.bashrc` or `.profile`, remove those old lines after confirming the new profile works.
-
-## Shared variables
-
-The profile scope holds values every shell gets. The repository's own tooling needs only these:
-
-| Variable | Needed by | |
-|---|---|---|
-| `TAIGA_API_URL`, `TAIGA_USERNAME`, `TAIGA_PASSWORD` | `scripts/taiga-story.sh`, `scripts/taiga-comment.sh`, and the Taiga MCP launcher | Required; setup reports any that are missing |
-| `GH_TOKEN` | `gh`, and the devcontainer example's `containerEnv` | Optional; `gh auth login` works instead |
-
-Add anything else your own tools read, such as package or API tokens, the same way.
-
-Choose a scope by who reads the value:
-
-- Use the profile when a tool starts outside a project directory: user-wide MCP servers, `gh`, and devcontainer `containerEnv`, which reads the host shell at launch, so direnv values never reach it.
-- Use the profile for values that are the same in every repository, such as your Taiga login.
-- Use a project scope through direnv for values that differ per project or carry a large blast radius, such as a production Stripe key; it then exists only inside that project's directory.
-- When the same value shows up in several project scopes, move it: `./scripts/envtool set profile NAME`, then remove it from each project with `./scripts/envtool edit project/<project>`.
+Setup adds guarded source lines to your Bash startup files so each shell gets the credentials, a tidy `PATH` with `~/.local/bin` first, and your optional aliases. Details: [docs/shell-profile.md](docs/shell-profile.md).
 
 ## Project variables
 
-Add a project value with `./scripts/envtool set project/my-project STRIPE_SECRET_KEY`. `profile.sh` exports `DEV_ENV_HOME`, the directory of this clone, so project `.envrc` files never hardcode its location. In that project's `.envrc`, use:
+Store a project value with `./scripts/envtool set project/my-project NAME`, then load it from that project's `.envrc` and run `direnv allow`:
 
 ```bash
 watch_file "$DEV_ENV_HOME/secrets/project/my-project.enc.json"
@@ -55,20 +61,24 @@ _dev_env_exports="$("$DEV_ENV_HOME/scripts/envtool" export project/my-project)" 
 eval "$_dev_env_exports"; unset _dev_env_exports
 ```
 
-Run `direnv allow` in the project. Project values override profile defaults. The included `.envrc` shows the pattern and can load an ignored `.env.local` for nonsecret local settings.
+Project values override profile defaults.
 
-For a devcontainer, launch VS Code or the devcontainer CLI from a host shell that has loaded the desired environment. Explicitly opt in each repository by merging `examples/devcontainer.jsonc` into its devcontainer configuration. Its read-only bind mount exposes only `shell/` at `/opt/dev-env-shell`; `postCreateCommand` installs source blocks into the container user's Bash startup files. If the project already has a `postCreateCommand`, add `bash /opt/dev-env-shell/install-container.sh` to that command. Adjust the sample `/home/vscode` credential mount targets to the project's container user. `containerEnv` passes selected host variables, including `GH_TOKEN_FOR_PACKAGES`; neither the age identity nor encrypted vault is mounted or decrypted in the container. Claude and Codex authentication files remain in their existing home directories and are mounted from there; they are not copied into this repository.
+## Devcontainer
+
+Each repository opts in by merging `examples/devcontainer.jsonc` into its devcontainer configuration. Only the shell fragments and selected host variables reach the container, never the age key or vault. Details: [docs/devcontainer.md](docs/devcontainer.md).
 
 ## Taiga MCP
 
-`./scripts/setup-taiga-mcp` clones [pytaiga-mcp](https://github.com/Alterna-Dev-Studio/pytaiga-mcp) into `~/work/utils/pytaiga-mcp` (override with `PYTAIGA_MCP_HOME`) and installs its locked dependencies with `uv`. `scripts/taiga-mcp workflow|full [profile|project/NAME]` then launches it over stdio with `TAIGA_API_URL`, `TAIGA_USERNAME`, and `TAIGA_PASSWORD` decrypted from the chosen vault scope; neither client configuration holds credentials. The committed `.mcp.json` points Claude Code at `scripts/taiga-mcp full` for this repository, which is the tool set the installed skills expect. `./scripts/setup-taiga-mcp` (run by setup when `uv` is available) also registers the launcher for Codex when `codex` is on PATH. For a user-wide Claude entry, `claude mcp add -s user taiga-py -- "$PWD/scripts/taiga-mcp" workflow` gives the smaller ref-based tool set.
+Setup installs a local Taiga MCP server that reads its credentials from the vault, so no client configuration holds a password. Details: [docs/taiga-mcp.md](docs/taiga-mcp.md).
 
 ## Agent skills
 
-SAASDK native skills `analyze-story`, `implement-story`, `pr-converse`, `review-tests`, and `codex-review-pr` are installed for Claude Code (`.claude/skills/`) and Codex (`.agents/skills/`). `pr-comments-resolve`, copied from you-thon, is installed for both and resolves PR review threads. `fully-implement-story` (with `implement-task`, `finalize-story-pr`, `rebase-branch`, and the worker roles under `.claude/agents/` and `.codex/agents/`) runs a story end to end: it implements each task with a fresh agent, reviews the tests, opens the PR, and resolves review threads; there is no CI gate (the local suite is the gate) and no manual-testing phase. `AGENTS.md` holds the consumer-local Taiga mapping they read first; `docs/saasdk-install.md` records the pinned sources, per-file hashes, patches, and verification.
+Claude Code and Codex ship with skills that analyze a story, implement it task by task, and resolve review threads. The Taiga mapping is in `AGENTS.md`; sources and patches are recorded in [docs/saasdk-install.md](docs/saasdk-install.md).
 
-Run the tests with `python3 -m unittest discover -s tests`. They use a temporary home directory and never touch your key or vault.
+## Testing
 
-Never commit the age identity, decrypted JSON, `.env`, or `.env.local`. An encrypted repo still reveals variable names and recipient metadata, so keep personal vaults private.
+The tests use a temporary home directory and never touch your key or vault. Policy: [docs/testing-workflow.md](docs/testing-workflow.md).
 
-Run `python3 -m unittest discover -s tests -v` to verify repeatable PATH setup and the shell-only devcontainer installer without a SOPS key.
+## Security
+
+Never commit the age identity, decrypted JSON, `.env`, or `.env.local`. Keep personal vaults private, since an encrypted repo still reveals variable names and recipients.
