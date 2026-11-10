@@ -1,0 +1,88 @@
+#!/usr/bin/env python3
+"""Store Pangolin credentials in an encrypted scope for the Taiga MCP launcher."""
+import argparse
+import getpass
+from pathlib import Path
+import runpy
+import subprocess
+import sys
+
+ROOT = Path(__file__).resolve().parent.parent
+SESSION_VARS = ("PANGOLIN_SESSION_TOKEN", "PANGOLIN_DASHBOARD_URL")
+SHARE_LINK_VARS = ("PANGOLIN_RESOURCE_TOKEN", "PANGOLIN_ACCESS_TOKEN_ID", "PANGOLIN_ACCESS_TOKEN")
+
+
+def read_secret(use_stdin, prompt):
+    if use_stdin:
+        value = sys.stdin.readline()
+    elif not sys.stdin.isatty():
+        raise RuntimeError("interactive input is unavailable; use --stdin and pipe the value")
+    else:
+        try:
+            value = getpass.getpass(prompt)
+        except (EOFError, KeyboardInterrupt):
+            raise RuntimeError("cancelled") from None
+    if not value.strip():
+        raise RuntimeError("no value provided; the scope was not changed")
+    return value
+
+
+def session_token(value):
+    value = value.strip()
+    if value.split() != [value] or "." in value or "://" in value:
+        raise RuntimeError("--session expects the token printed by pangolin-login, not a Share Link")
+    return value
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("scope", help="profile or project/<name>")
+    parser.add_argument("--stdin", action="store_true",
+                        help="Read the token from standard input instead of a hidden prompt")
+    parser.add_argument("--session", action="store_true",
+                        help="Store a user session token from pangolin-login (needs --dashboard-url)")
+    parser.add_argument("--dashboard-url", help="Pangolin dashboard origin the session belongs to")
+    parser.add_argument("--clear", action="store_true",
+                        help="Remove all Pangolin variables from the scope")
+    args = parser.parse_args()
+    if args.session and not args.dashboard_url:
+        parser.error("--session requires --dashboard-url")
+    if args.dashboard_url and not args.session:
+        parser.error("--dashboard-url is only used with --session")
+
+    envtool = runpy.run_path(str(ROOT / "scripts/envtool"))
+    envtool["path_for"](args.scope)
+    if args.clear:
+        values = envtool["decrypt"](args.scope)
+        for name in SESSION_VARS + SHARE_LINK_VARS:
+            values.pop(name, None)
+        envtool["encrypt"](args.scope, values)
+        print(f"Removed Pangolin variables from {args.scope}.")
+        return
+
+    if args.session:
+        login = runpy.run_path(str(ROOT / "scripts/pangolin-login"))
+        dashboard = login["dashboard_origin"](args.dashboard_url)
+        updates = {"PANGOLIN_SESSION_TOKEN": session_token(read_secret(args.stdin, "Pangolin session token: ")),
+                   "PANGOLIN_DASHBOARD_URL": dashboard}
+        saved = "PANGOLIN_SESSION_TOKEN and PANGOLIN_DASHBOARD_URL"
+    else:
+        normalize = runpy.run_path(str(ROOT / "scripts/pangolin-token"))["normalize_share_link"]
+        updates = {"PANGOLIN_RESOURCE_TOKEN":
+                   normalize(read_secret(args.stdin, "Pangolin Share Link URL or ID.token: "))}
+        saved = "PANGOLIN_RESOURCE_TOKEN"
+
+    values = envtool["decrypt"](args.scope)
+    for name in SESSION_VARS + SHARE_LINK_VARS:
+        values.pop(name, None)
+    values.update(updates)
+    envtool["encrypt"](args.scope, values)
+    print(f"Saved {saved} in {args.scope}. Restart the Taiga MCP server to use it.")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (RuntimeError, OSError, ValueError, subprocess.CalledProcessError) as error:
+        print(f"pangolin-configure: {error}", file=sys.stderr)
+        sys.exit(1)

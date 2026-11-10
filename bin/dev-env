@@ -11,6 +11,7 @@ import sys
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT / "scripts"
 ENVTOOL = ("export", "set", "list", "edit", "init")
+PANGOLIN = ("pangolin-login", "pangolin-token", "pangolin-configure")
 COMMANDS = (
     ("export <scope>", "print `export NAME=value` lines for a vault scope"),
     ("set <scope> NAME", "store one vault value, read with hidden input"),
@@ -19,6 +20,9 @@ COMMANDS = (
     ("setup [options]", "install the profile and create the vault (./scripts/setup)"),
     ("taiga-mcp install", "clone pytaiga-mcp and sync its venv (./scripts/setup-taiga-mcp)"),
     ("taiga-mcp workflow|full [scope]", "launch the Taiga MCP server over stdio"),
+    ("pangolin-login --dashboard-url URL", "sign in to Pangolin with a device code; print the token"),
+    ("pangolin-token [options]", "paste an admin-created Pangolin Share Link; print the token"),
+    ("pangolin-configure <scope> [options]", "store a Pangolin token in a vault scope"),
 )
 
 
@@ -39,7 +43,7 @@ def main(argv):
     command, rest = argv[0], argv[1:]
     if command in ENVTOOL:
         target, args = SCRIPTS / "envtool", [command, *rest]
-    elif command in ("setup", "setup-taiga-mcp", "taiga-mcp"):
+    elif command in ("setup", "setup-taiga-mcp", "taiga-mcp", *PANGOLIN):
         target, args = SCRIPTS / command, rest
         if command == "taiga-mcp" and rest[:1] == ["install"]:
             target, args = SCRIPTS / "setup-taiga-mcp", rest[1:]

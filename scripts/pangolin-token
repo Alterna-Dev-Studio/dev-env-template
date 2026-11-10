@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""Obtain a Pangolin Share Link token from the dashboard and print it on stdout."""
+import argparse
+import getpass
+import sys
+from urllib.parse import parse_qs, urlsplit
+import webbrowser
+
+INSTRUCTIONS = """\
+Share Links are created by a Pangolin organization admin. If that is not you,
+ask an admin for a Share Link to the protected resource and paste it below.
+Admins: sign in to Pangolin, select View as Admin, then Settings > Share Links.
+Search the resource picker for the protected hostname and create a Share Link.
+Paste the https://.../s/<token> link, or its p_token=ID.token value."""
+
+
+def normalize_share_link(value):
+    """Return the /s/ link or ID.token form, rejecting other Pangolin keys."""
+    value = value.strip()
+    if value.startswith("pangolin-key-"):
+        raise RuntimeError("That is a Pangolin AI Gateway key; create a Share Link instead")
+    if value.startswith(("https://", "http://")):
+        link = urlsplit(value)
+        if link.path.startswith("/s/"):
+            secret = link.path.removeprefix("/s/")
+            if (link.scheme != "https" or not link.hostname or link.username
+                    or link.password or not secret or "/" in secret
+                    or link.query or link.fragment):
+                raise RuntimeError("Pangolin Share Link must be an HTTPS /s/<token> URL")
+            return value
+        tokens = parse_qs(link.query, keep_blank_values=True).get("p_token", [])
+        if len(tokens) != 1:
+            raise RuntimeError("Pangolin resource URL must contain one p_token parameter")
+        value = tokens[0]
+    parts = value.split(".")
+    if len(parts) != 2 or not all(parts):
+        raise RuntimeError("Pangolin Share Link must be an HTTPS /s/<token> URL or ID.token")
+    return value
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--dashboard-url", help="Pangolin dashboard URL to open for sign-in")
+    parser.add_argument("--no-browser", action="store_true", help="Do not open the dashboard")
+    parser.add_argument("--stdin", action="store_true",
+                        help="Read the pasted link from standard input instead of a prompt")
+    args = parser.parse_args()
+
+    if not args.stdin and not sys.stdin.isatty():
+        raise RuntimeError("interactive input is unavailable; use --stdin and pipe the link")
+
+    print(INSTRUCTIONS, file=sys.stderr)
+    if args.dashboard_url:
+        print(f"Dashboard: {args.dashboard_url}", file=sys.stderr)
+        if not args.stdin and not args.no_browser:
+            webbrowser.open(args.dashboard_url)
+    if args.stdin:
+        value = sys.stdin.readline()
+    else:
+        try:
+            value = getpass.getpass("Pangolin Share Link URL or ID.token: ")
+        except (EOFError, KeyboardInterrupt):
+            raise RuntimeError("cancelled") from None
+    token = normalize_share_link(value)
+    if sys.stdout.isatty():
+        print("Pipe this command into pangolin-configure to avoid showing the token.",
+              file=sys.stderr)
+    print(token)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except RuntimeError as error:
+        print(f"pangolin-token: {error}", file=sys.stderr)
+        sys.exit(1)
