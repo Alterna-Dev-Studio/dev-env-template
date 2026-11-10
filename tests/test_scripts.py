@@ -2,12 +2,15 @@
 
 Run with: python3 -m unittest discover -s tests
 """
+import http.server
+import json
 import os
 from pathlib import Path
 import pty
 import shutil
 import subprocess
 import tempfile
+import threading
 import unittest
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -25,7 +28,7 @@ class ScriptTests(unittest.TestCase):
         self.home.mkdir()
         self.repo = self.tmp / "repo"
         (self.repo / "scripts").mkdir(parents=True)
-        for name in ("envtool", "setup", "setup-taiga-mcp", "taiga-mcp"):
+        for name in ("envtool", "setup", "setup-taiga-mcp", "taiga-mcp", *('pangolin-token', 'pangolin-configure', 'pangolin-login')):
             shutil.copy2(ROOT / "scripts" / name, self.repo / "scripts" / name)
         shutil.copy2(ROOT / "profile.sh", self.repo / "profile.sh")
         shutil.copy2(ROOT / ".envrc", self.repo / ".envrc")
@@ -51,11 +54,12 @@ class ScriptTests(unittest.TestCase):
             (bin_dir / name).unlink(missing_ok=True)
         return os.pathsep.join([*map(str, dirs), str(bin_dir)])
 
-    def run_script(self, *args, check=True, skip_taiga_mcp=True):
+    def run_script(self, *args, check=True, skip_taiga_mcp=True, stdin=None):
         if args[0] == "setup" and skip_taiga_mcp and "--skip-taiga-mcp" not in args:
             args = (*args, "--skip-taiga-mcp")
         result = subprocess.run([str(self.repo / "scripts" / args[0]), *args[1:]], env=self.env,
-                                cwd=self.repo, stdin=subprocess.DEVNULL, text=True, capture_output=True)
+                                cwd=self.repo, stdin=None if stdin is not None else subprocess.DEVNULL,
+                                input=stdin, text=True, capture_output=True)
         if check and result.returncode:
             self.fail(f"{args} failed: {result.stderr}")
         return result
@@ -381,6 +385,146 @@ class ScriptTests(unittest.TestCase):
         self.assertEqual(len(records), 1)
         self.assertIn(str(self.repo / ".envrc"), records[0].read_text())
 
+
+    def exported(self, scope="profile"):
+        return dict(line.removeprefix("export ").split("=", 1)
+                    for line in self.run_script("envtool", "export", scope).stdout.splitlines())
+
+    def test_pangolin_token_normalizes_share_links(self):
+        cases = {
+            "https://pangolin.example/s/abc123\n": "https://pangolin.example/s/abc123",
+            "https://taiga.example/?p_token=id1.secret\n": "id1.secret",
+            "id1.secret\n": "id1.secret",
+        }
+        for pasted, expected in cases.items():
+            result = self.run_script("pangolin-token", "--stdin", stdin=pasted)
+            self.assertEqual(result.stdout, expected + "\n")
+            self.assertIn("Share Links", result.stderr)
+            self.assertNotIn("secret", result.stderr)
+            self.assertNotIn("abc123", result.stderr)
+
+    def test_pangolin_token_rejects_other_keys(self):
+        for pasted in ("pangolin-key-abc.def", "http://pangolin.example/s/abc", "a.b.c",
+                       "https://pangolin.example/s/abc?x=1", "https://taiga.example/?q=1", ""):
+            result = self.run_script("pangolin-token", "--stdin", stdin=pasted, check=False)
+            self.assertEqual(result.returncode, 1, pasted)
+            self.assertEqual(result.stdout, "", pasted)
+            self.assertIn("pangolin-token:", result.stderr, pasted)
+
+    def test_pangolin_configure_replaces_legacy_pair(self):
+        self.run_script("setup")
+        self.store("profile", {"PANGOLIN_ACCESS_TOKEN_ID": "x", "PANGOLIN_ACCESS_TOKEN": "y",
+                               "TAIGA_PASSWORD": "p"})
+        result = self.run_script("pangolin-configure", "profile", "--stdin",
+                                 stdin="https://pangolin.example/s/abc123\n")
+        self.assertNotIn("abc123", result.stdout + result.stderr)
+        self.assertEqual(self.exported(), {"PANGOLIN_RESOURCE_TOKEN":
+                                           "https://pangolin.example/s/abc123",
+                                           "TAIGA_PASSWORD": "p"})
+        self.run_script("pangolin-configure", "profile", "--clear")
+        self.assertEqual(self.exported(), {"TAIGA_PASSWORD": "p"})
+
+    def fake_pangolin(self, polls_before_verified, expired=False):
+        """Serve Pangolin's device-web-auth start/poll endpoints on a loopback port."""
+        state = {"polls": 0}
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def reply(self, payload):
+                body = json.dumps(payload).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(body)
+
+            def do_POST(self):
+                assert self.path == "/api/v1/auth/device-web-auth/start"
+                assert self.headers["X-CSRF-Token"] == "x-csrf-protection"
+                body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                assert body["applicationName"] == "pytaiga-mcp" and body["deviceName"]
+                self.reply({"data": {"code": "AB12-CD34", "expiresInSeconds": 300}})
+
+            def do_GET(self):
+                assert self.path == "/api/v1/auth/device-web-auth/poll/AB12-CD34"
+                state["polls"] += 1
+                if expired:
+                    self.reply({"data": {"verified": False}, "message": "Code expired"})
+                elif state["polls"] > polls_before_verified:
+                    self.reply({"data": {"verified": True, "token": "sess10n"}})
+                else:
+                    self.reply({"data": {"verified": False}, "message": "Code not yet verified"})
+
+            def log_message(self, *args):
+                pass
+
+        server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        return f"http://127.0.0.1:{server.server_port}", state
+
+    def test_pangolin_login_polls_until_confirmed(self):
+        dashboard, state = self.fake_pangolin(polls_before_verified=2)
+        result = self.run_script("pangolin-login", "--dashboard-url", dashboard, "--no-browser",
+                                 "--poll-interval", "0.01")
+        self.assertEqual(result.stdout, "sess10n\n")
+        self.assertEqual(state["polls"], 3)
+        self.assertIn("AB12-CD34", result.stderr)
+        self.assertIn(f"{dashboard}/auth/login/device?code=AB12-CD34", result.stderr)
+        self.assertNotIn("sess10n", result.stderr)
+
+    def test_pangolin_login_reports_expired_code(self):
+        dashboard, _ = self.fake_pangolin(polls_before_verified=0, expired=True)
+        result = self.run_script("pangolin-login", "--dashboard-url", dashboard, "--no-browser",
+                                 check=False)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("expired", result.stderr)
+        rejected = self.run_script("pangolin-login", "--dashboard-url", "http://pangolin.example",
+                                   "--no-browser", check=False)
+        self.assertEqual(rejected.returncode, 1)
+        self.assertIn("https://", rejected.stderr)
+
+    def test_pangolin_configure_session_replaces_share_link(self):
+        self.run_script("setup")
+        self.store("profile", {"PANGOLIN_RESOURCE_TOKEN": "id.secret", "TAIGA_PASSWORD": "p"})
+        result = self.run_script("pangolin-configure", "profile", "--session", "--dashboard-url",
+                                 "https://connect.example/", "--stdin", stdin="sess10n\n")
+        self.assertNotIn("sess10n", result.stdout + result.stderr)
+        self.assertEqual(self.exported(), {"PANGOLIN_SESSION_TOKEN": "sess10n",
+                                           "PANGOLIN_DASHBOARD_URL": "https://connect.example",
+                                           "TAIGA_PASSWORD": "p"})
+        self.run_script("pangolin-configure", "profile", "--stdin", stdin="id.secret\n")
+        self.assertEqual(self.exported(), {"PANGOLIN_RESOURCE_TOKEN": "id.secret",
+                                           "TAIGA_PASSWORD": "p"})
+        self.run_script("pangolin-configure", "profile", "--clear")
+        self.assertEqual(self.exported(), {"TAIGA_PASSWORD": "p"})
+
+    def test_pangolin_configure_session_rejects_bad_arguments(self):
+        self.run_script("setup")
+        self.store("profile", {"TAIGA_PASSWORD": "p"})
+        before = (self.repo / "secrets/profile.enc.json").read_text()
+        for args, stdin in ((("profile", "--session", "--stdin"), "sess10n\n"),
+                            (("profile", "--dashboard-url", "https://c.example", "--stdin"), "x\n"),
+                            (("profile", "--session", "--dashboard-url", "http://c.example",
+                              "--stdin"), "sess10n\n"),
+                            (("profile", "--session", "--dashboard-url", "https://c.example",
+                              "--stdin"), "https://c.example/s/abc\n")):
+            result = self.run_script("pangolin-configure", *args, stdin=stdin, check=False)
+            self.assertNotEqual(result.returncode, 0, args)
+            self.assertEqual(result.stdout, "", args)
+        self.assertEqual((self.repo / "secrets/profile.enc.json").read_text(), before)
+
+    def test_pangolin_configure_leaves_vault_alone_on_bad_input(self):
+        self.run_script("setup")
+        self.store("profile", {"TAIGA_PASSWORD": "p"})
+        before = (self.repo / "secrets/profile.enc.json").read_text()
+        for args, stdin in ((("profile", "--stdin"), "pangolin-key-abc.def\n"),
+                            (("profile", "--stdin"), "\n"),
+                            (("../etc", "--stdin"), "id1.secret\n")):
+            result = self.run_script("pangolin-configure", *args, stdin=stdin, check=False)
+            self.assertEqual(result.returncode, 1, args)
+            self.assertIn("pangolin-configure:", result.stderr, args)
+        self.assertEqual((self.repo / "secrets/profile.enc.json").read_text(), before)
 
 class HelpAndPreflightTests(unittest.TestCase):
     def setUp(self):

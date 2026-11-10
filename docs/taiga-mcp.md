@@ -32,9 +32,9 @@ registrations below keep the script path because MCP clients start it without a 
   the environment, it uses them.
 - Otherwise it decrypts the named vault scope (default `profile`) through `scripts/envtool`.
   Scopes are described in [secrets.md](secrets.md).
-- The `PANGOLIN_RESOURCE_TOKEN`, `PANGOLIN_ACCESS_TOKEN_ID`, `PANGOLIN_ACCESS_TOKEN`, and
-  `PANGOLIN_SESSION_REQUEST_PARAM` variables are passed through when present and cleared
-  otherwise, so the checkout's legacy `.env` cannot supply them.
+- The `PANGOLIN_*` variables (see [Taiga behind Pangolin](#taiga-behind-pangolin)) are passed
+  through when present and cleared otherwise, so the checkout's legacy `.env` cannot supply
+  them.
 - Neither client configuration below holds credentials.
 
 Errors name the fix:
@@ -43,6 +43,51 @@ Errors name the fix:
   means the checkout or its `.venv` is missing.
 - `Missing Taiga settings: set ... in the environment or in vault scope ...` means a
   required variable is empty in the source the launcher chose.
+
+## Taiga behind Pangolin
+
+When Pangolin protects the Taiga API, the server needs a Pangolin credential in addition to
+the Taiga login. Obtaining it and storing it are separate scripts, so the secret never has
+to appear on the terminal; both are also `dv` commands.
+
+**Your own login (any user).** `scripts/pangolin-login --dashboard-url URL` requests a
+device code, prints it with the confirm URL (`URL/auth/login/device?code=…`), opens that
+page, and polls until you sign in with your own Pangolin account (password, 2FA or an
+external identity provider all work in the browser) and confirm. It prints the resulting
+user session token on stdout. `scripts/pangolin-configure SCOPE --session --dashboard-url URL`
+stores it as `PANGOLIN_SESSION_TOKEN` with `PANGOLIN_DASHBOARD_URL`:
+
+```bash
+dv pangolin-login --dashboard-url https://pangolin.example | dv pangolin-configure profile --session --dashboard-url https://pangolin.example --stdin
+```
+
+The session lasts as long as a Pangolin dashboard login (30 days by default, extended on
+use) and ends when you log out of Pangolin or an admin revokes it. Access follows your
+Pangolin roles, so the resource must allow SSO for your role or user. At startup the server
+requests the Taiga root like a browser; when Pangolin redirects to the configured dashboard
+it presents the session there and keeps the resource cookie Pangolin sets. A plain `200`
+(for example on a LAN with split DNS) means Taiga is not proxied from that network, and the
+server logs in directly. `Pangolin session expired or has no access to this resource; run
+pangolin-login again` means exactly that: run the pair again. `--no-browser` prints the
+confirm URL only.
+
+**Share Link (admin-created, for service accounts).** `scripts/pangolin-token` prints the
+admin steps (View as Admin, Settings → Share Links, search the resource picker for the
+protected hostname, create a link), optionally opens the dashboard with `--dashboard-url URL`,
+reads the pasted link with hidden input, validates it, and prints only the token on stdout.
+`scripts/pangolin-configure SCOPE` without `--session` saves it as `PANGOLIN_RESOURCE_TOKEN`:
+
+```bash
+dv pangolin-token --dashboard-url https://pangolin.example | dv pangolin-configure profile --stdin
+```
+
+A dashboard `https://…/s/<token>` link, a resource URL with `p_token=ID.token`, or a bare
+`ID.token` value is accepted; organization API keys and `pangolin-key-…` AI Gateway keys are
+rejected because they cannot authorize a protected HTTP resource.
+
+Storing one kind of credential removes the other, so a scope holds either a session or a
+Share Link. `pangolin-configure SCOPE --clear` removes all Pangolin variables. Both
+configure modes accept `--stdin`. Restart the MCP server after changing a scope.
 
 ## Modes
 

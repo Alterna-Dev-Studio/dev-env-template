@@ -31,6 +31,7 @@ def main():
     pangolin_names = (
         "PANGOLIN_RESOURCE_TOKEN", "PANGOLIN_ACCESS_TOKEN_ID",
         "PANGOLIN_ACCESS_TOKEN", "PANGOLIN_SESSION_REQUEST_PARAM",
+        "PANGOLIN_DASHBOARD_URL", "PANGOLIN_SESSION_TOKEN", "PANGOLIN_SESSION_COOKIE",
     )
     if scope is None and all(os.environ.get(name) for name in required):
         profile = {name: os.environ[name] for name in required}

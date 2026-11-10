@@ -39,6 +39,8 @@ Setup also adds a few lines to your Bash startup files, allows the clone's `.env
 | `dv list <scope>` | Lists variable names only |
 | `dv taiga-mcp install` | Installs the Taiga MCP server |
 | `./scripts/taiga-mcp` | Launches the Taiga MCP server |
+| `dv pangolin-login --dashboard-url URL` | Signs in to Pangolin with your own account (device code) |
+| `dv pangolin-configure <scope> --session --dashboard-url URL` | Stores that Pangolin session in a scope |
 | `./scripts/taiga-story.sh` | Fetches a Taiga story |
 | `./scripts/taiga-comment.sh` | Comments on a Taiga item |
 | `python3 -m unittest discover -s tests -v` | Runs the tests |
@@ -71,7 +73,7 @@ Each repository opts in by merging `examples/devcontainer.jsonc` into its devcon
 
 ## Taiga MCP
 
-Setup installs a local Taiga MCP server that reads its credentials from the vault, so no client configuration holds a password. Details: [docs/taiga-mcp.md](docs/taiga-mcp.md).
+Setup installs a local Taiga MCP server that reads its credentials from the vault, so no client configuration holds a password. When Pangolin fronts the Taiga API, sign in once with `dv pangolin-login` and store the session with `dv pangolin-configure`; the launcher passes it to the server. Details: [docs/taiga-mcp.md](docs/taiga-mcp.md).
 
 ## Agent skills
 

@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+"""Log in to Pangolin with your own account via a device code; print the session token."""
+import argparse
+import json
+import socket
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+import webbrowser
+
+# Pangolin's external API rejects POSTs without this fixed header.
+CSRF = {"X-CSRF-Token": "x-csrf-protection", "Content-Type": "application/json"}
+LOCAL_HOSTS = ("127.0.0.1", "localhost")
+
+
+def dashboard_origin(value):
+    """Require an HTTPS origin; plain HTTP is allowed for loopback test servers only."""
+    link = urllib.parse.urlsplit(value.strip())
+    secure = link.scheme == "https"
+    local = link.scheme == "http" and link.hostname in LOCAL_HOSTS
+    if (not secure and not local) or not link.hostname or link.username or link.password \
+            or link.path not in ("", "/") or link.query or link.fragment:
+        raise RuntimeError("--dashboard-url must be an https:// origin such as https://pangolin.example")
+    return f"{link.scheme}://{link.netloc}"
+
+
+def api(method, url, body=None, opener=urllib.request.urlopen):
+    request = urllib.request.Request(url, method=method, headers=CSRF if body is not None else {},
+                                     data=json.dumps(body).encode() if body is not None else None)
+    try:
+        with opener(request, timeout=15) as response:
+            payload = json.load(response)
+    except urllib.error.HTTPError as error:
+        raise RuntimeError(f"Pangolin returned HTTP {error.code} for {url.rsplit('/', 1)[0]}") from None
+    except (urllib.error.URLError, OSError, ValueError):
+        raise RuntimeError("could not reach the Pangolin dashboard") from None
+    if not isinstance(payload, dict) or not isinstance(payload.get("data"), (dict, type(None))):
+        raise RuntimeError("unexpected response from Pangolin")
+    return payload
+
+
+def start_device_auth(dashboard, application, device, opener=urllib.request.urlopen):
+    payload = api("POST", f"{dashboard}/api/v1/auth/device-web-auth/start",
+                  {"applicationName": application, "deviceName": device}, opener)
+    data = payload.get("data") or {}
+    code, expires = data.get("code"), data.get("expiresInSeconds")
+    if not isinstance(code, str) or not code or not isinstance(expires, (int, float)):
+        raise RuntimeError("Pangolin did not return a device code")
+    return code, float(expires)
+
+
+def poll_device_auth(dashboard, code, deadline, interval=2.0, opener=urllib.request.urlopen,
+                     sleep=time.sleep, clock=time.monotonic):
+    url = f"{dashboard}/api/v1/auth/device-web-auth/poll/{urllib.parse.quote(code, safe='')}"
+    while True:
+        payload = api("GET", url, opener=opener)
+        data = payload.get("data") or {}
+        if data.get("verified") is True:
+            token = data.get("token")
+            if not isinstance(token, str) or not token.strip():
+                raise RuntimeError("Pangolin did not return a session token")
+            return token.strip()
+        message = str(payload.get("message", ""))
+        if "expired" in message.lower() or "not found" in message.lower():
+            raise RuntimeError(f"device code {message.lower()}; run pangolin-login again")
+        if clock() >= deadline:
+            raise RuntimeError("device code expired before it was confirmed; run pangolin-login again")
+        sleep(interval)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--dashboard-url", required=True, help="Pangolin dashboard origin")
+    parser.add_argument("--no-browser", action="store_true", help="Do not open the confirm page")
+    parser.add_argument("--application-name", default="pytaiga-mcp",
+                        help="Name shown on the Pangolin confirm page and device list")
+    parser.add_argument("--poll-interval", type=float, default=2.0, help=argparse.SUPPRESS)
+    args = parser.parse_args()
+
+    dashboard = dashboard_origin(args.dashboard_url)
+    code, expires = start_device_auth(dashboard, args.application_name, socket.gethostname())
+    confirm_url = f"{dashboard}/auth/login/device?{urllib.parse.urlencode({'code': code})}"
+    print(f"Device code: {code}", file=sys.stderr)
+    print(f"Sign in with your own Pangolin account and confirm this code at:\n  {confirm_url}",
+          file=sys.stderr)
+    print(f"The code expires in {int(expires) // 60} minutes.", file=sys.stderr)
+    if not args.no_browser:
+        webbrowser.open(confirm_url)
+    token = poll_device_auth(dashboard, code, time.monotonic() + expires, args.poll_interval)
+    if sys.stdout.isatty():
+        print("Pipe this command into pangolin-configure --session to avoid showing the token.",
+              file=sys.stderr)
+    print(token)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("pangolin-login: cancelled", file=sys.stderr)
+        sys.exit(1)
+    except RuntimeError as error:
+        print(f"pangolin-login: {error}", file=sys.stderr)
+        sys.exit(1)
