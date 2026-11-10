@@ -46,48 +46,74 @@ Errors name the fix:
 
 ## Taiga behind Pangolin
 
-When Pangolin protects the Taiga API, the server needs a Pangolin credential in addition to
-the Taiga login. Obtaining it and storing it are separate scripts, so the secret never has
-to appear on the terminal; both are also `dv` commands.
+Pangolin is the login proxy in front of our Taiga server. If the Taiga site asks you to sign in
+through Pangolin in your browser, the MCP server needs a Pangolin credential too. Pick one path:
 
-**Your own login (any user).** `scripts/pangolin-login --dashboard-url URL` requests a
-device code, prints it with the confirm URL (`URL/auth/login/device?code=…`), opens that
-page, and polls until you sign in with your own Pangolin account (password, 2FA or an
-external identity provider all work in the browser) and confirm. It prints the resulting
-user session token on stdout. `scripts/pangolin-configure SCOPE --session --dashboard-url URL`
-stores it as `PANGOLIN_SESSION_TOKEN` with `PANGOLIN_DASHBOARD_URL`:
+| You are | Use |
+|---|---|
+| A person with a Pangolin account | [Your own login](#your-own-login) |
+| Setting up a shared or automation account | [Share Link from an admin](#share-link-from-an-admin) |
 
-```bash
-dv pangolin-login --dashboard-url https://pangolin.example | dv pangolin-configure profile --session --dashboard-url https://pangolin.example --stdin
-```
+Either way, a scope holds one Pangolin credential: saving one kind removes the other.
+`dv pangolin-configure <scope> --clear` removes them all. Restart the MCP server after any
+change.
 
-The session lasts as long as a Pangolin dashboard login (30 days by default, extended on
-use) and ends when you log out of Pangolin or an admin revokes it. Access follows your
-Pangolin roles, so the resource must allow SSO for your role or user. At startup the server
-requests the Taiga root like a browser; when Pangolin redirects to the configured dashboard
-it presents the session there and keeps the resource cookie Pangolin sets. A plain `200`
-(for example on a LAN with split DNS) means Taiga is not proxied from that network, and the
-server logs in directly. `Pangolin session expired or has no access to this resource; run
-pangolin-login again` means exactly that: run the pair again. `--no-browser` prints the
-confirm URL only.
+### Your own login
 
-**Share Link (admin-created, for service accounts).** `scripts/pangolin-token` prints the
-admin steps (View as Admin, Settings → Share Links, search the resource picker for the
-protected hostname, create a link), optionally opens the dashboard with `--dashboard-url URL`,
-reads the pasted link with hidden input, validates it, and prints only the token on stdout.
-`scripts/pangolin-configure SCOPE` without `--session` saves it as `PANGOLIN_RESOURCE_TOKEN`:
+Replace `https://pangolin.example` with the address of the page where you sign in to Pangolin.
 
-```bash
-dv pangolin-token --dashboard-url https://pangolin.example | dv pangolin-configure profile --stdin
-```
+1. Run both commands as one pipeline. `--stdin` is required when piping:
 
-A dashboard `https://…/s/<token>` link, a resource URL with `p_token=ID.token`, or a bare
-`ID.token` value is accepted; organization API keys and `pangolin-key-…` AI Gateway keys are
-rejected because they cannot authorize a protected HTTP resource.
+   ```bash
+   dv pangolin-login --dashboard-url https://pangolin.example | dv pangolin-configure profile --session --dashboard-url https://pangolin.example --stdin
+   ```
 
-Storing one kind of credential removes the other, so a scope holds either a session or a
-Share Link. `pangolin-configure SCOPE --clear` removes all Pangolin variables. Both
-configure modes accept `--stdin`. Restart the MCP server after changing a scope.
+2. A browser tab opens on Pangolin's confirm page showing a short device code. The same code
+   and URL are printed in the terminal. Sign in with your usual account (password, 2FA, or your
+   company identity provider) and confirm the code. It expires in a few minutes.
+3. Success prints `Saved PANGOLIN_SESSION_TOKEN and PANGOLIN_DASHBOARD_URL in profile. Restart
+   the Taiga MCP server to use it.` Restart the server and you are done.
+
+The token is the only thing on stdout, so the pipe keeps it off your screen. The session lasts
+30 days and renews each time it is used. It ends if you log out of Pangolin or an admin revokes
+it. For a project scope, replace `profile` with `project/<name>`.
+
+- `--no-browser` stops the tab opening; copy the printed URL yourself (useful over SSH).
+- On a network that reaches Taiga directly, the server logs `Taiga is not behind Pangolin from
+  this network; skipping` and logs in to Taiga as usual. Nothing to do.
+
+When it breaks:
+
+- `Pangolin session expired or has no access to this resource; run pangolin-login again`:
+  rerun step 1. If it fails again right after a fresh login, your Pangolin account cannot open
+  Taiga; ask an admin.
+- `device code expired before it was confirmed`: rerun step 1 and confirm sooner.
+- `interactive input is unavailable; use --stdin`: you piped into `pangolin-configure`
+  without `--stdin`.
+
+### Share Link from an admin
+
+For shared or automation accounts only. A Share Link is a URL a Pangolin admin creates that
+opens one protected site without a user login.
+
+1. Ask a Pangolin admin for a Share Link to the Taiga API hostname. (Admin: View as Admin,
+   Settings > Share Links, search for the hostname, create the link.)
+2. Run this, then paste the link at the hidden prompt:
+
+   ```bash
+   dv pangolin-token | dv pangolin-configure profile --stdin
+   ```
+
+   Accepted: `https://pangolin.example/s/<token>`, a Taiga URL containing
+   `p_token=<id>.<secret>`, or the bare `<id>.<secret>`. A `pangolin-key-<...>` AI Gateway key
+   is refused. Organization API keys are not Share Links and will not open Taiga.
+3. Success prints `Saved PANGOLIN_RESOURCE_TOKEN in profile.` Restart the server.
+
+`dv pangolin-token --dashboard-url https://pangolin.example` also opens the dashboard for the
+admin. `dv pangolin-token --stdin` reads the link from a pipe instead of the prompt.
+
+The scripts are `./scripts/pangolin-login`, `./scripts/pangolin-token`, and
+`./scripts/pangolin-configure` when the profile is not loaded.
 
 ## Modes
 
