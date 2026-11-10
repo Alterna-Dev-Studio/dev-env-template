@@ -11,7 +11,7 @@ import sys
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT / "scripts"
 ENVTOOL = ("export", "set", "list", "edit", "init")
-PANGOLIN = ("pangolin-login", "pangolin-token", "pangolin-configure")
+PANGOLIN = ("pangolin-login", "pangolin-token", "pangolin-configure", "taiga-login", "taiga-configure")
 COMMANDS = (
     ("export <scope>", "print `export NAME=value` lines for a vault scope"),
     ("set <scope> NAME", "store one vault value; secrets are read with hidden input"),
@@ -23,6 +23,8 @@ COMMANDS = (
     ("pangolin-login --dashboard-url URL", "sign in to Pangolin with a device code; print the token"),
     ("pangolin-token [options]", "paste an admin-created Pangolin Share Link; print the token"),
     ("pangolin-configure <scope> [options]", "store a Pangolin token in a vault scope"),
+    ("taiga-login [scope] [--no-browser]", "sign in to Taiga with your identity provider; print a token"),
+    ("taiga-configure <scope> [options]", "store a Taiga token in a vault scope"),
 )
 
 

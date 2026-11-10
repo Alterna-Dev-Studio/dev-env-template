@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+"""Store a Taiga Application token from taiga-login in an encrypted scope."""
+import argparse
+from pathlib import Path
+import runpy
+import subprocess
+import sys
+
+ROOT = Path(__file__).resolve().parent.parent
+TOKEN_VARS = ("TAIGA_AUTH_TOKEN", "TAIGA_TOKEN_TYPE")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("scope", help="profile or project/<name>")
+    parser.add_argument("--stdin", action="store_true",
+                        help="Read the token from standard input instead of a hidden prompt")
+    parser.add_argument("--clear", action="store_true",
+                        help="Remove the Taiga token variables from the scope")
+    args = parser.parse_args()
+
+    envtool = runpy.run_path(str(ROOT / "scripts/envtool"))
+    envtool["path_for"](args.scope)
+    values = envtool["decrypt"](args.scope)
+    if args.clear:
+        for name in TOKEN_VARS:
+            values.pop(name, None)
+        envtool["encrypt"](args.scope, values)
+        print(f"Removed Taiga token variables from {args.scope}.")
+        return
+
+    token = envtool["read_value"](args.stdin, "Taiga Application token (hidden): ").strip()
+    if token.split() != [token]:
+        raise RuntimeError("the token must be a single word, as printed by taiga-login")
+    values["TAIGA_AUTH_TOKEN"] = token
+    values["TAIGA_TOKEN_TYPE"] = "Application"
+    envtool["encrypt"](args.scope, values)
+    kept = " TAIGA_USERNAME/TAIGA_PASSWORD stay stored but the token takes precedence." \
+        if values.get("TAIGA_PASSWORD") else ""
+    print(f"Saved TAIGA_AUTH_TOKEN in {args.scope}. Restart the Taiga MCP server to use it.{kept}")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (RuntimeError, OSError, ValueError, subprocess.CalledProcessError) as error:
+        print(f"taiga-configure: {error}", file=sys.stderr)
+        sys.exit(1)

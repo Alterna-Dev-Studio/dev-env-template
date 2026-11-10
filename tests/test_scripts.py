@@ -28,7 +28,8 @@ class ScriptTests(unittest.TestCase):
         self.home.mkdir()
         self.repo = self.tmp / "repo"
         (self.repo / "scripts").mkdir(parents=True)
-        for name in ("envtool", "setup", "setup-taiga-mcp", "taiga-mcp", *('pangolin-token', 'pangolin-configure', 'pangolin-login')):
+        for name in ("envtool", "setup", "setup-taiga-mcp", "taiga-mcp", *('pangolin-token', 'pangolin-configure', 'pangolin-login',
+                       'taiga-login', 'taiga-configure')):
             shutil.copy2(ROOT / "scripts" / name, self.repo / "scripts" / name)
         shutil.copy2(ROOT / "profile.sh", self.repo / "profile.sh")
         shutil.copy2(ROOT / ".envrc", self.repo / ".envrc")
@@ -187,6 +188,11 @@ class ScriptTests(unittest.TestCase):
         self.assertEqual(result.stdout.splitlines()[1], "env.example|eu|ep|stdio|stale-host-value")
         result = self.run_script("taiga-mcp", "full", "profile")
         self.assertEqual(result.stdout.splitlines()[1], "https://taiga.example|u|p|stdio|")
+        # A taiga-login token replaces the username and password.
+        self.store("project/token", {"TAIGA_API_URL": "https://taiga.example",
+                                     "TAIGA_AUTH_TOKEN": "app-t0ken"})
+        result = self.run_script("taiga-mcp", "full", "project/token")
+        self.assertEqual(result.stdout.splitlines()[1], "https://taiga.example|||stdio|")
         for name in ("TAIGA_API_URL", "TAIGA_USERNAME", "TAIGA_PASSWORD"):
             del self.env[name]
         result = self.run_script("taiga-mcp", "full", "project/empty", check=False)
@@ -397,6 +403,55 @@ class ScriptTests(unittest.TestCase):
             self.assertTrue(tool["is_secret"](name), name)
         for name in ("TAIGA_API_URL", "TAIGA_USERNAME", "TAIGA_HOST", "DEV_HOME"):
             self.assertFalse(tool["is_secret"](name), name)
+
+    def fake_pytaiga(self):
+        """A stand-in pytaiga-mcp checkout whose login module prints the environment it got."""
+        checkout = self.tmp / "pytaiga-mcp"
+        (checkout / ".venv/bin").mkdir(parents=True)
+        (checkout / ".venv/bin/python").symlink_to(shutil.which("python3"))
+        (checkout / "src").mkdir()
+        (checkout / "src/__init__.py").write_text("")
+        (checkout / "src/taiga_login.py").write_text(
+            "import os, sys; print(*(os.environ.get(n, '<unset>') for n in ('TAIGA_API_URL', "
+            "'TAIGA_OIDC_ISSUER', 'TAIGA_OIDC_CLIENT_ID', 'TAIGA_APPLICATION_ID', "
+            "'PANGOLIN_SESSION_TOKEN', 'TAIGA_PASSWORD')), *sys.argv[1:], sep='|')\n")
+        self.env["PYTAIGA_MCP_HOME"] = str(checkout)
+        return checkout
+
+    def test_taiga_login_passes_scope_values_to_pytaiga(self):
+        self.run_script("setup")
+        self.fake_pytaiga()
+        self.store("profile", {"TAIGA_API_URL": "https://taiga.example", "TAIGA_PASSWORD": "p",
+                               "TAIGA_OIDC_ISSUER": "https://login.example",
+                               "TAIGA_OIDC_CLIENT_ID": "cli", "TAIGA_APPLICATION_ID": "app",
+                               "PANGOLIN_SESSION_TOKEN": "sess"})
+        result = self.run_script("taiga-login", "--no-browser")
+        self.assertEqual(result.stdout.strip(),
+                         "https://taiga.example|https://login.example|cli|app|sess||--no-browser")
+        self.store("project/bare", {"TAIGA_API_URL": "https://taiga.example"})
+        result = self.run_script("taiga-login", "project/bare", check=False)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("lacks TAIGA_OIDC_ISSUER, TAIGA_OIDC_CLIENT_ID, TAIGA_APPLICATION_ID",
+                      result.stderr)
+        result = self.run_script("taiga-login", "profile", "--bogus", check=False)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("usage:", result.stderr)
+
+    def test_taiga_configure_stores_application_token(self):
+        self.run_script("setup")
+        self.store("profile", {"TAIGA_API_URL": "https://taiga.example", "TAIGA_PASSWORD": "p"})
+        result = self.run_script("taiga-configure", "profile", "--stdin", stdin="app-t0ken\n")
+        self.assertIn("Saved TAIGA_AUTH_TOKEN in profile.", result.stdout)
+        self.assertNotIn("app-t0ken", result.stdout + result.stderr)
+        self.assertEqual(self.exported(), {"TAIGA_API_URL": "https://taiga.example",
+                                           "TAIGA_PASSWORD": "p", "TAIGA_AUTH_TOKEN": "app-t0ken",
+                                           "TAIGA_TOKEN_TYPE": "Application"})
+        bad = self.run_script("taiga-configure", "profile", "--stdin", stdin="two words\n", check=False)
+        self.assertEqual(bad.returncode, 1)
+        self.assertIn("single word", bad.stderr)
+        self.run_script("taiga-configure", "profile", "--clear")
+        self.assertEqual(self.exported(), {"TAIGA_API_URL": "https://taiga.example",
+                                           "TAIGA_PASSWORD": "p"})
 
     def test_pangolin_token_normalizes_share_links(self):
         cases = {

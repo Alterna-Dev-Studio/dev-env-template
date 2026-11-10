@@ -28,6 +28,7 @@ def main():
         raise RuntimeError(f"Install pytaiga-mcp and its virtual environment at {server_root} (run scripts/setup-taiga-mcp)")
 
     required = ("TAIGA_API_URL", "TAIGA_USERNAME", "TAIGA_PASSWORD")
+    token_names = ("TAIGA_AUTH_TOKEN", "TAIGA_TOKEN_TYPE")
     pangolin_names = (
         "PANGOLIN_RESOURCE_TOKEN", "PANGOLIN_ACCESS_TOKEN_ID",
         "PANGOLIN_ACCESS_TOKEN", "PANGOLIN_SESSION_REQUEST_PARAM",
@@ -35,18 +36,20 @@ def main():
     )
     if scope is None and all(os.environ.get(name) for name in required):
         profile = {name: os.environ[name] for name in required}
-        for name in pangolin_names:
+        for name in token_names + pangolin_names:
             profile[name] = os.environ.get(name, "")
     else:
         profile = runpy.run_path(str(root / "scripts/envtool"))["decrypt"](scope or "profile")
-        missing = [name for name in required if not profile.get(name)]
+        # A token from taiga-login replaces the username and password.
+        needed = required[:1] if profile.get("TAIGA_AUTH_TOKEN") else required
+        missing = [name for name in needed if not profile.get(name)]
         if missing:
             raise RuntimeError(f"Missing Taiga settings: set {', '.join(missing)} in the environment"
                                f" or in vault scope {scope or 'profile'}")
 
     # The checkout has a legacy .env. Explicit environment values take precedence
     # over it, including empty values for Pangolin settings absent from SOPS.
-    for name in required + pangolin_names:
+    for name in required + token_names + pangolin_names:
         os.environ[name] = profile.get(name, "")
     os.environ["TAIGA_TRANSPORT"] = "stdio"
     os.chdir(server_root)

@@ -1,0 +1,60 @@
+#!/usr/bin/env python3
+"""Sign in to Taiga with your identity-provider account; print a Taiga Application token.
+
+Reads TAIGA_API_URL, TAIGA_OIDC_ISSUER, TAIGA_OIDC_CLIENT_ID, TAIGA_APPLICATION_ID and
+any PANGOLIN_* settings from the given vault scope (default: profile), then runs
+pytaiga-mcp's `mcp-taiga-login` with them. Store the printed token with
+`taiga-configure SCOPE --stdin`.
+"""
+import os
+from pathlib import Path
+import runpy
+import sys
+
+NEEDED = ("TAIGA_API_URL", "TAIGA_OIDC_ISSUER", "TAIGA_OIDC_CLIENT_ID", "TAIGA_APPLICATION_ID")
+PANGOLIN = (
+    "PANGOLIN_RESOURCE_TOKEN", "PANGOLIN_ACCESS_TOKEN_ID", "PANGOLIN_ACCESS_TOKEN",
+    "PANGOLIN_SESSION_REQUEST_PARAM", "PANGOLIN_DASHBOARD_URL", "PANGOLIN_SESSION_TOKEN",
+    "PANGOLIN_SESSION_COOKIE",
+)
+# Never let the checkout's .env or the scope's current credentials leak into the login run.
+CLEARED = ("TAIGA_USERNAME", "TAIGA_PASSWORD", "TAIGA_AUTH_TOKEN", "TAIGA_TOKEN_TYPE")
+
+
+def main():
+    args = sys.argv[1:]
+    flags = [a for a in args if a.startswith("--")]
+    scopes = [a for a in args if not a.startswith("--")]
+    if len(scopes) > 1 or any(f not in ("--no-browser", "--revoke", "--help", "-h") for f in flags):
+        raise RuntimeError("usage: taiga-login [profile|project/NAME] [--no-browser] [--revoke]")
+    if "--help" in flags or "-h" in flags:
+        print(__doc__.strip())
+        return
+    scope = scopes[0] if scopes else "profile"
+
+    root = Path(__file__).resolve().parent.parent
+    server_root = Path(os.environ.get("PYTAIGA_MCP_HOME") or Path.home() / "work/utils/pytaiga-mcp")
+    python = server_root / ".venv/bin/python"
+    if not python.is_file() or not (server_root / "src/taiga_login.py").is_file():
+        raise RuntimeError(f"Install pytaiga-mcp and its virtual environment at {server_root}"
+                           " (run scripts/setup-taiga-mcp)")
+
+    profile = runpy.run_path(str(root / "scripts/envtool"))["decrypt"](scope)
+    missing = [name for name in NEEDED if not profile.get(name)]
+    if missing:
+        raise RuntimeError(f"Vault scope {scope} lacks {', '.join(missing)}. Add each with"
+                           f" ./scripts/envtool set {scope} NAME (ask the Taiga admin for the values)")
+    for name in NEEDED + PANGOLIN:
+        os.environ[name] = profile.get(name, "")
+    for name in CLEARED:
+        os.environ[name] = ""
+    os.chdir(server_root)
+    os.execv(str(python), [str(python), "-m", "src.taiga_login", *flags])
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (RuntimeError, OSError, ValueError) as error:
+        print(f"taiga-login: {error}", file=sys.stderr)
+        sys.exit(1)

@@ -43,6 +43,22 @@ def prompt_value(name):
     return input(f"{name}: ")
 
 
+def read_value(use_stdin, prompt):
+    """One value from a pipe (--stdin) or a hidden terminal prompt; empty input is an error."""
+    if use_stdin:
+        value = sys.stdin.readline()
+    elif not sys.stdin.isatty():
+        raise RuntimeError("interactive input is unavailable; use --stdin and pipe the value")
+    else:
+        try:
+            value = getpass.getpass(prompt)
+        except (EOFError, KeyboardInterrupt):
+            raise RuntimeError("cancelled") from None
+    if not value.strip():
+        raise RuntimeError("no value provided; the scope was not changed")
+    return value
+
+
 def binary(name):
     found = locate(name)
     if found is None:
