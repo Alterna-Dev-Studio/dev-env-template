@@ -27,7 +27,7 @@ You end up with your own private copy of this repository on GitHub, cloned to yo
    cd my-dev-env && ./scripts/setup
    ```
 
-4. Answer setup's prompts for `TAIGA_API_URL`, `TAIGA_USERNAME`, and `TAIGA_PASSWORD`. Nothing is shown as you type any of them. Setup then creates the vault and your age identity, adds the profile to your Bash startup files, and installs the Taiga MCP server.
+4. Answer setup's prompts for `TAIGA_API_URL`, `TAIGA_USERNAME`, and `TAIGA_PASSWORD`. Only the password is hidden as you type. Setup then creates the vault and your age identity, adds the profile to your Bash startup files, and installs the Taiga MCP server.
 5. Back up the file setup prints as `Age identity:`. Without it you cannot decrypt your secrets.
 6. Open a new terminal. Your credentials and tool paths are now loaded.
 
@@ -39,7 +39,7 @@ You end up with your own private copy of this repository on GitHub, cloned to yo
 |---|---|
 | `gh dev-env <name>` | Creates your private copy, clones it, and runs setup |
 | `./scripts/setup` | Installs the profile and creates the vault |
-| `dv set <scope> NAME` | Adds a vault value (hidden input) |
+| `dv set <scope> NAME` | Adds a vault value (secrets are hidden as you type) |
 | `dv edit <scope>` | Edits a scope in your editor |
 | `dv list <scope>` | Lists variable names only |
 | `dv taiga-mcp install` | Installs the Taiga MCP server |

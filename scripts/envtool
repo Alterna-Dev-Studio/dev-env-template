@@ -29,6 +29,20 @@ def locate(name):
     return found if Path(found).is_file() else None
 
 
+SECRET_NAME = re.compile(r"PASSWORD|SECRET|TOKEN|KEY|CREDENTIAL", re.IGNORECASE)
+
+
+def is_secret(name):
+    """Hide input only for names that look like secrets; URLs and usernames stay visible."""
+    return SECRET_NAME.search(name) is not None
+
+
+def prompt_value(name):
+    if is_secret(name):
+        return getpass.getpass(f"{name} (hidden): ")
+    return input(f"{name}: ")
+
+
 def binary(name):
     found = locate(name)
     if found is None:
@@ -142,7 +156,8 @@ def main():
                           ("list", "print the variable names stored in a scope, never the values"),
                           ("edit", "open the decrypted scope as JSON in $EDITOR via sops")):
         sub.add_parser(command, help=text, description=text).add_argument("scope", help=SCOPE_HELP)
-    set_text = "store one variable in a scope; the value is read with hidden input"
+    set_text = ("store one variable in a scope; passwords, tokens and keys are read with "
+                "hidden input, other values are shown as you type")
     setting = sub.add_parser("set", help=set_text, description=set_text)
     setting.add_argument("scope", help=SCOPE_HELP)
     setting.add_argument("name", help="environment variable name, e.g. TAIGA_PASSWORD")
@@ -153,7 +168,7 @@ def main():
         if not NAME.fullmatch(args.name):
             raise RuntimeError("Invalid environment variable name")
         values = decrypt(args.scope)
-        values[args.name] = getpass.getpass(f"{args.name}: ")
+        values[args.name] = prompt_value(args.name)
         encrypt(args.scope, values)
         print(f"Saved {args.name} in {args.scope}.")
     elif args.command == "edit":

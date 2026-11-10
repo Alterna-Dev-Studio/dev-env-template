@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Initialize SOPS and install the shared profile in Bash."""
 import argparse
-import getpass
 import os
 from pathlib import Path
 import re
@@ -102,8 +101,8 @@ def prompt_missing():
     if not sys.stdin.isatty():
         print("Missing required profile values: " + ", ".join(missing) + ". " + hint)
         return
-    print("Enter the required profile values (input is hidden; leave one blank to skip it).")
-    entered = {name: value for name in missing if (value := getpass.getpass(f"{name}: "))}
+    print("Enter the required profile values (the password is hidden; leave one blank to skip it).")
+    entered = {name: value for name in missing if (value := tool["prompt_value"](name))}
     if entered:
         stored.update(entered)
         tool["encrypt"]("profile", stored)

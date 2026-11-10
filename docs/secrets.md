@@ -57,7 +57,7 @@ fact that two projects share one account, and the second scope ends up a duplica
 
 | Command | What it does |
 |---|---|
-| `dv set <scope> NAME` | Reads the value with hidden input and re-encrypts the scope |
+| `dv set <scope> NAME` | Reads the value (hidden for passwords, tokens and keys) and re-encrypts the scope |
 | `dv edit <scope>` | Opens the scope in SOPS, which honors `$EDITOR`; creates the scope if missing |
 | `dv list <scope>` | Prints variable names only |
 | `dv export <scope>` | Prints `export NAME=value` lines; used by `profile.sh` and `.envrc` |
