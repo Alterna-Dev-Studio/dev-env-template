@@ -13,27 +13,25 @@ You end up with your own private copy of this repository on GitHub, cloned to yo
    mkdir -p ~/work/utils && cd ~/work/utils
    ```
 
-3. Install the extension once, then create your copy. Replace `my-dev-env` with the name you want for your repository; it becomes the folder name too (here `~/work/utils/my-dev-env`):
+3. Create your copy and run setup. Replace `my-dev-env` with the name you want for your repository; it becomes the folder name too (here `~/work/utils/my-dev-env`). `gh dev-env` creates the private repository from this template, clones it, and then runs `./scripts/setup` inside the clone:
 
    ```bash
    gh extension install Alterna-Dev-Studio/gh-dev-env
    gh dev-env my-dev-env
    ```
 
-   Already have a copy on GitHub? Clone it into the same folder instead and run `./scripts/setup` there.
+   Already have a copy on GitHub, or prefer not to use the extension? Clone it and run setup yourself:
 
-4. Answer the prompts. Setup asks for your Taiga URL, username, and password, and the password is not shown as you type.
+   ```bash
+   git clone git@github.com:YOUR-USER/my-dev-env.git
+   cd my-dev-env && ./scripts/setup
+   ```
+
+4. Answer setup's prompts: your Taiga URL, username, and password (the password is not shown as you type). Setup then creates the vault and your age key, adds the profile to your Bash startup files, and installs the Taiga MCP server if `uv` is present.
 5. Back up the key file that setup prints at the end. Without it you cannot decrypt your secrets.
 6. Open a new terminal. Your credentials and tool paths are now loaded.
 
-`gh dev-env` makes a private repository under your GitHub account from this template, clones it into `./my-dev-env` (relative to the current directory), and runs `./scripts/setup` inside it. To use an organization, give `owner/name`. Setup options such as `--skip-taiga-mcp` go after the name. Without the extension, these two commands do the same thing:
-
-```bash
-gh repo create my-dev-env --template Alterna-Dev-Studio/dev-env-template --private --clone
-cd my-dev-env && ./scripts/setup
-```
-
-Setup also adds a few lines to your Bash startup files, allows the clone's `.envrc`, and installs the Taiga MCP server if `uv` is present. Running it again is safe.
+`gh dev-env` works for an organization too: give `owner/name`. Setup options such as `--skip-taiga-mcp` go after the name. Without the extension, `gh repo create my-dev-env --template Alterna-Dev-Studio/dev-env-template --private --clone` followed by `cd my-dev-env && ./scripts/setup` does the same thing. Setup also allows the clone's `.envrc`. Running it again is safe.
 
 ## Commands
 
