@@ -1,30 +1,19 @@
 #!/usr/bin/env python3
 """Store Pangolin credentials in an encrypted scope for the Taiga MCP launcher."""
 import argparse
-import getpass
 from pathlib import Path
 import runpy
 import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parent.parent
+ENVTOOL = runpy.run_path(str(ROOT / "scripts/envtool"))
 SESSION_VARS = ("PANGOLIN_SESSION_TOKEN", "PANGOLIN_DASHBOARD_URL")
 SHARE_LINK_VARS = ("PANGOLIN_RESOURCE_TOKEN", "PANGOLIN_ACCESS_TOKEN_ID", "PANGOLIN_ACCESS_TOKEN")
 
 
 def read_secret(use_stdin, prompt):
-    if use_stdin:
-        value = sys.stdin.readline()
-    elif not sys.stdin.isatty():
-        raise RuntimeError("interactive input is unavailable; use --stdin and pipe the value")
-    else:
-        try:
-            value = getpass.getpass(prompt)
-        except (EOFError, KeyboardInterrupt):
-            raise RuntimeError("cancelled") from None
-    if not value.strip():
-        raise RuntimeError("no value provided; the scope was not changed")
-    return value
+    return ENVTOOL["read_value"](use_stdin, prompt)
 
 
 def session_token(value):
@@ -50,7 +39,7 @@ def main():
     if args.dashboard_url and not args.session:
         parser.error("--dashboard-url is only used with --session")
 
-    envtool = runpy.run_path(str(ROOT / "scripts/envtool"))
+    envtool = ENVTOOL
     envtool["path_for"](args.scope)
     if args.clear:
         values = envtool["decrypt"](args.scope)

@@ -41,6 +41,47 @@ Errors name the fix:
 - `Missing Taiga settings: set ... in the environment or in vault scope ...` means a
   required variable is empty in the source the launcher chose.
 
+## Taiga login with your identity provider
+
+If the Taiga site offers "Sign in with <your identity provider>", the MCP server can use a
+token tied to that account instead of a Taiga password. Three non-secret values must be in
+the scope first; the Taiga admin publishes them:
+
+```bash
+dv set profile TAIGA_OIDC_ISSUER        # e.g. https://login.example
+dv set profile TAIGA_OIDC_CLIENT_ID     # the "Taiga CLI" app's client id
+dv set profile TAIGA_APPLICATION_ID     # the Taiga external application's id
+```
+
+1. Run both commands as one pipeline. `--stdin` is required when piping:
+
+   ```bash
+   dv taiga-login profile | dv taiga-configure profile --stdin
+   ```
+
+2. A browser tab opens on the identity provider showing a short device code; the same code
+   and URL are printed in the terminal. Sign in with your usual account and confirm.
+3. Success prints `Saved TAIGA_AUTH_TOKEN in profile. Restart the Taiga MCP server to use it.`
+   Restart the server and you are done. A stored `TAIGA_USERNAME`/`TAIGA_PASSWORD` can stay;
+   the token takes precedence.
+
+The token does not expire. `dv taiga-login profile --revoke | dv taiga-configure profile --stdin`
+revokes your existing tokens for the application and stores a fresh one; `dv taiga-configure
+profile --clear` removes the token from the scope. For a project scope, replace `profile`
+with `project/<name>`. `--no-browser` stops the tab opening (useful over SSH).
+
+When it breaks:
+
+- `Taiga rejected the configured token; run taiga-login again` (in the MCP server's log):
+  the token was revoked or deleted; rerun step 1.
+- `taiga-login: Taiga could not match your identity-provider account to a Taiga user`:
+  sign in to Taiga once in the browser with that account, then rerun step 1.
+- `taiga-login: Vault scope profile lacks TAIGA_OIDC_ISSUER, …`: add the three values above.
+- `taiga-login: the device code expired before it was confirmed`: rerun step 1 and confirm
+  sooner.
+
+Behind Pangolin, `taiga-login` uses the Pangolin credential already in the scope.
+
 ## Taiga behind Pangolin
 
 Pangolin is the login proxy in front of our Taiga server. If the Taiga site asks you to sign in

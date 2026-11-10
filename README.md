@@ -47,6 +47,8 @@ You end up with your own private copy of this repository on GitHub, cloned to yo
 | `dv pangolin-login --dashboard-url URL` | Signs in to Pangolin in your browser; prints a session token |
 | `dv pangolin-token` | Checks a pasted Pangolin Share Link; prints its token |
 | `dv pangolin-configure <scope> --stdin [--session --dashboard-url URL]` | Stores a piped Pangolin token in a scope |
+| `dv taiga-login [scope]` | Signs in to Taiga with your identity provider; prints a Taiga token |
+| `dv taiga-configure <scope> --stdin` | Stores a piped Taiga token in a scope (replaces the password) |
 | `./scripts/taiga-story.sh` | Fetches a Taiga story |
 | `./scripts/taiga-comment.sh` | Comments on a Taiga item |
 | `python3 -m unittest discover -s tests -v` | Runs the tests |
@@ -79,7 +81,7 @@ Each repository opts in by merging `examples/devcontainer.jsonc` into its devcon
 
 ## Taiga MCP
 
-Setup installs a local Taiga MCP server that reads its credentials from the vault, so no client configuration holds a password. If Taiga sits behind Pangolin, our login proxy, the server also needs a Pangolin token from the vault. Details: [docs/taiga-mcp.md](docs/taiga-mcp.md).
+Setup installs a local Taiga MCP server that reads its credentials from the vault, so no client configuration holds a password. If Taiga signs you in through an identity provider, `dv taiga-login` gives the server a token tied to your account instead of a Taiga password. If Taiga sits behind Pangolin, our login proxy, the server also needs a Pangolin token from the vault. Details: [docs/taiga-mcp.md](docs/taiga-mcp.md).
 
 ## Agent skills
 
