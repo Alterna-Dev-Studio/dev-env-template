@@ -10,17 +10,15 @@
 `~/work/utils/pytaiga-mcp` and runs `uv sync --frozen` there. It requires `git` and `uv`.
 
 - Set `PYTAIGA_MCP_HOME` to use another location. The launcher reads the same variable, so
-  export it in both places.
+  the MCP client must see it too.
 - If the directory already exists it must be a pytaiga-mcp checkout (`pyproject.toml`,
   `uv.lock`, `src/server_workflow.py`, and `src/server_full.py`). Otherwise the script
   refuses and changes nothing.
 - `scripts/setup` runs this install for you when it can find `uv`. If `uv` is missing it
   prints a note and skips the install. Pass `--skip-taiga-mcp` to skip the install and the
   Codex registration on purpose.
-- When `codex` is on `PATH`, `setup-taiga-mcp` also registers this clone's launcher for
-  Codex with `codex mcp add taiga-py -- "$PWD/scripts/taiga-mcp" full`. That command
-  replaces an entry of the same name, so re-running is safe. Without `codex` the script
-  prints the command so you can run it later.
+- When `codex` is on `PATH`, it also registers the launcher with Codex (see
+  [Client registration](#client-registration)). Otherwise it prints the command to run later.
 
 ## Launch
 
@@ -32,9 +30,8 @@ registrations below keep the script path because MCP clients start it without a 
   the environment, it uses them.
 - Otherwise it decrypts the named vault scope (default `profile`) through `scripts/envtool`.
   Scopes are described in [secrets.md](secrets.md).
-- The `PANGOLIN_*` variables (see [Taiga behind Pangolin](#taiga-behind-pangolin)) are passed
-  through when present and cleared otherwise, so the checkout's legacy `.env` cannot supply
-  them.
+- Taiga and Pangolin settings come only from that source; the checkout's own `.env` cannot
+  supply them.
 - Neither client configuration below holds credentials.
 
 Errors name the fix:
@@ -84,8 +81,8 @@ it. For a project scope, replace `profile` with `project/<name>`.
 
 When it breaks:
 
-- `Pangolin session expired or has no access to this resource; run pangolin-login again`:
-  rerun step 1. If it fails again right after a fresh login, your Pangolin account cannot open
+- `Pangolin session expired or has no access to this resource; run pangolin-login again`
+  (in the MCP server's log): rerun step 1. If it fails again right after a fresh login, your Pangolin account cannot open
   Taiga; ask an admin.
 - `device code expired before it was confirmed`: rerun step 1 and confirm sooner.
 - `interactive input is unavailable; use --stdin`: you piped into `pangolin-configure`
@@ -109,8 +106,7 @@ opens one protected site without a user login.
    is refused. Organization API keys are not Share Links and will not open Taiga.
 3. Success prints `Saved PANGOLIN_RESOURCE_TOKEN in profile.` Restart the server.
 
-`dv pangolin-token --dashboard-url https://pangolin.example` also opens the dashboard for the
-admin. `dv pangolin-token --stdin` reads the link from a pipe instead of the prompt.
+`dv pangolin-token --stdin` reads the link from a pipe instead of the prompt.
 
 The scripts are `./scripts/pangolin-login`, `./scripts/pangolin-token`, and
 `./scripts/pangolin-configure` when the profile is not loaded.
@@ -120,7 +116,7 @@ The scripts are `./scripts/pangolin-login`, `./scripts/pangolin-token`, and
 - `full` is the complete tool set (`get_user_story`, `get_user_story_statuses`,
   `list_epics`, and so on). The skills installed under `.claude/skills/` and
   `.agents/skills/` are written against it.
-- `workflow` is the smaller ref-based tool set, suitable for a user-wide entry.
+- `workflow` is the smaller tool set, suitable for a user-wide entry.
 
 ## Client registration
 

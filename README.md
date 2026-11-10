@@ -1,13 +1,13 @@
 # Development environment template
 
-A small, reusable home for shared development-tool configuration. Secrets live in SOPS-encrypted JSON and the age key stays outside Git. Your shell loads shared credentials and tool paths on startup, and project `.envrc` files can load more.
+A small, reusable home for shared development-tool configuration. Secrets live in SOPS-encrypted JSON. The key that decrypts them, the age identity, stays outside Git. Your shell loads shared credentials and tool paths on startup, and project `.envrc` files can load more.
 
 ## Quickstart
 
 You end up with your own private copy of this repository on GitHub, cloned to your machine and set up.
 
-1. Install the [GitHub CLI](https://cli.github.com/) and sign in with `gh auth login`. Setup also needs `sops`, `age`, and `direnv`. If any are missing, setup stops before changing anything and prints how to install them; install them, then run `./scripts/setup` inside the clone ([details](docs/secrets.md#prerequisites)).
-2. `cd` to the folder that will hold your copy. The clone is created **inside the directory you run the command from**, not under your home directory. `~/work/utils` is the usual choice: the Taiga MCP server is installed next to it as `~/work/utils/pytaiga-mcp`, and MCP client entries point at the launcher by absolute path.
+1. Install the [GitHub CLI](https://cli.github.com/) and sign in with `gh auth login`. Setup also needs `sops`, `age`, `direnv`, and `uv` (for the Taiga MCP server). If any are missing, setup stops before changing anything and prints how to install them; install them, then run `./scripts/setup` inside the clone ([details](docs/secrets.md#prerequisites)).
+2. `cd` to the folder that will hold your copy. Step 3 creates the clone **inside this directory**, not under your home directory. `~/work/utils` is the usual choice; the Taiga MCP server is installed there too, as `~/work/utils/pytaiga-mcp`.
 
    ```bash
    mkdir -p ~/work/utils && cd ~/work/utils
@@ -20,30 +20,30 @@ You end up with your own private copy of this repository on GitHub, cloned to yo
    gh dev-env my-dev-env
    ```
 
-   Already have a copy on GitHub, or prefer not to use the extension? Clone it and run setup yourself:
+   Already have a copy on GitHub? Clone it and run setup yourself:
 
    ```bash
-   git clone git@github.com:YOUR-USER/my-dev-env.git
+   git clone git@github.com:<your-user>/my-dev-env.git
    cd my-dev-env && ./scripts/setup
    ```
 
-4. Answer setup's prompts: your Taiga URL, username, and password (the password is not shown as you type). Setup then creates the vault and your age key, adds the profile to your Bash startup files, and installs the Taiga MCP server if `uv` is present.
-5. Back up the key file that setup prints at the end. Without it you cannot decrypt your secrets.
+4. Answer setup's prompts for `TAIGA_API_URL`, `TAIGA_USERNAME`, and `TAIGA_PASSWORD`. Nothing is shown as you type any of them. Setup then creates the vault and your age identity, adds the profile to your Bash startup files, and installs the Taiga MCP server.
+5. Back up the file setup prints as `Age identity:`. Without it you cannot decrypt your secrets.
 6. Open a new terminal. Your credentials and tool paths are now loaded.
 
-`gh dev-env` works for an organization too: give `owner/name`. Setup options such as `--skip-taiga-mcp` go after the name. Without the extension, `gh repo create my-dev-env --template Alterna-Dev-Studio/dev-env-template --private --clone` followed by `cd my-dev-env && ./scripts/setup` does the same thing. Setup also allows the clone's `.envrc`. Running it again is safe.
+`gh dev-env` works for an organization too: give `owner/name`. Setup options such as `--skip-taiga-mcp` go after the name. Without the extension, `gh repo create my-dev-env --template Alterna-Dev-Studio/dev-env-template --private --clone` followed by `cd my-dev-env && ./scripts/setup` does the same thing. Running setup again is safe.
 
 ## Commands
 
 | Command | What it does |
 |---|---|
-| `gh dev-env [name]` | Creates your private copy, clones it, and runs setup |
+| `gh dev-env <name>` | Creates your private copy, clones it, and runs setup |
 | `./scripts/setup` | Installs the profile and creates the vault |
 | `dv set <scope> NAME` | Adds a vault value (hidden input) |
 | `dv edit <scope>` | Edits a scope in your editor |
 | `dv list <scope>` | Lists variable names only |
 | `dv taiga-mcp install` | Installs the Taiga MCP server |
-| `./scripts/taiga-mcp` | Launches the Taiga MCP server |
+| `dv taiga-mcp workflow\|full [scope]` | Launches the Taiga MCP server |
 | `dv pangolin-login --dashboard-url URL` | Signs in to Pangolin in your browser; prints a session token |
 | `dv pangolin-token` | Checks a pasted Pangolin Share Link; prints its token |
 | `dv pangolin-configure <scope> --stdin [--session --dashboard-url URL]` | Stores a piped Pangolin token in a scope |
@@ -51,19 +51,19 @@ You end up with your own private copy of this repository on GitHub, cloned to yo
 | `./scripts/taiga-comment.sh` | Comments on a Taiga item |
 | `python3 -m unittest discover -s tests -v` | Runs the tests |
 
-`dv` (also `dev-env`) is on `PATH` in every shell that has loaded the profile and runs the scripts in `scripts/` from any directory; `dv --help` lists its commands. Before setup has run, or in a script that may start without the profile, call the scripts by path instead.
+`dv` (also `dev-env`) is on `PATH` in every shell that has loaded the profile and runs the scripts in `scripts/` from any directory; `dv --help` lists its commands. Scopes are `profile` or `project/<name>`. Before setup has run, or in a script that may start without the profile, call the scripts by path instead.
 
 ## Secrets and scopes
 
-Values every shell needs, such as your Taiga login, go in the profile scope. Values that differ per project or are risky if leaked go in a project scope. Back up the age key setup prints: losing it makes the vault unrecoverable. Details: [docs/secrets.md](docs/secrets.md).
+Values every shell needs, such as your Taiga login, go in the profile scope. Values that differ per project or are risky if leaked go in a project scope. Details: [docs/secrets.md](docs/secrets.md).
 
 ## Shell profile
 
-Setup adds guarded source lines to your Bash startup files so each shell gets the credentials, a tidy `PATH` with `~/.local/bin` first and this clone's `bin/` (`dv`, `dev-env`) after your own directories, and your optional aliases. Details: [docs/shell-profile.md](docs/shell-profile.md).
+Setup adds source lines to your Bash startup files. Each shell then gets the credentials, your optional aliases, and a `PATH` with `~/.local/bin` first and this clone's `bin/` (`dv`, `dev-env`) after your own directories. Details: [docs/shell-profile.md](docs/shell-profile.md).
 
 ## Project variables
 
-Store a project value with `dv set project/my-project NAME`, then load it from that project's `.envrc` and run `direnv allow`. The `.envrc` calls the script by path because direnv may run before any shell has put `dv` on `PATH`:
+Store a project value with `dv set project/my-project NAME`, then load it from that project's `.envrc` and run `direnv allow`. The `.envrc` calls the script by path (`$DEV_ENV_HOME`, set by the profile) because direnv may run before any shell has put `dv` on `PATH`:
 
 ```bash
 watch_file "$DEV_ENV_HOME/secrets/project/my-project.enc.json"
@@ -79,7 +79,7 @@ Each repository opts in by merging `examples/devcontainer.jsonc` into its devcon
 
 ## Taiga MCP
 
-Setup installs a local Taiga MCP server that reads its credentials from the vault, so no client configuration holds a password. If Taiga sits behind Pangolin (our login proxy), run `dv pangolin-login` once and pipe it into `dv pangolin-configure`; the token goes in the vault too. Details: [docs/taiga-mcp.md](docs/taiga-mcp.md).
+Setup installs a local Taiga MCP server that reads its credentials from the vault, so no client configuration holds a password. If Taiga sits behind Pangolin, our login proxy, the server also needs a Pangolin token from the vault. Details: [docs/taiga-mcp.md](docs/taiga-mcp.md).
 
 ## Agent skills
 
