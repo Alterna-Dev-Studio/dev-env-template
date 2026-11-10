@@ -49,9 +49,16 @@ You end up with your own private copy of this repository on GitHub, cloned to yo
 | `dv pangolin-configure <scope> --stdin [--session --dashboard-url URL]` | Stores a piped Pangolin token in a scope |
 | `./scripts/taiga-story.sh` | Fetches a Taiga story |
 | `./scripts/taiga-comment.sh` | Comments on a Taiga item |
+| `dv update` | Merges the latest template into a `template-sync` branch of your copy |
 | `python3 -m unittest discover -s tests -v` | Runs the tests |
 
 `dv` (also `dev-env`) is on `PATH` in every shell that has loaded the profile and runs the scripts in `scripts/` from any directory; `dv --help` lists its commands. Scopes are `profile` or `project/<name>`. Before setup has run, or in a script that may start without the profile, call the scripts by path instead.
+
+## Updating from the template
+
+Your copy doesn't follow the template on its own. Run `dv update` to merge the latest template into a new `template-sync` branch; nothing is pushed. Review the branch, run the tests, then push it and open a PR (or merge it locally). Your vault and age identity are never touched: the template has no `secrets/`.
+
+The first sync links the two histories. A copy made with `gh dev-env` or `gh repo create --template` is matched to the template commit it started from, so only real changes on both sides conflict. A copy made some other way merges with every differing file in conflict unless you pass `--base COMMIT`. Later syncs are ordinary merges. `dv update --help` lists the options.
 
 ## Secrets and scopes
 

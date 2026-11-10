@@ -23,6 +23,7 @@ COMMANDS = (
     ("pangolin-login --dashboard-url URL", "sign in to Pangolin with a device code; print the token"),
     ("pangolin-token [options]", "paste an admin-created Pangolin Share Link; print the token"),
     ("pangolin-configure <scope> [options]", "store a Pangolin token in a vault scope"),
+    ("update [options]", "merge the latest template into a template-sync branch"),
 )
 
 
@@ -47,6 +48,8 @@ def main(argv):
         target, args = SCRIPTS / command, rest
         if command == "taiga-mcp" and rest[:1] == ["install"]:
             target, args = SCRIPTS / "setup-taiga-mcp", rest[1:]
+    elif command == "update":
+        target, args = SCRIPTS / "update-from-template", rest
     else:
         print(f"{Path(sys.argv[0]).name}: unknown command '{command}'\n", file=sys.stderr)
         usage(sys.stderr)

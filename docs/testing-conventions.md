@@ -1,7 +1,7 @@
 # Dev-env template test conventions
 
-The current suite uses Python `unittest` in `tests/test_shell.py` and
-`tests/test_scripts.py`. Tests invoke Bash and repository scripts with
+The current suite uses Python `unittest` in `tests/test_shell.py`,
+`tests/test_scripts.py` and `tests/test_update.py`. Tests invoke Bash and repository scripts with
 `subprocess.run`, capture output, and use temporary home and repository
 directories. `tests/test_scripts.py` skips the SOPS-backed suite unless
 `sops`, `age-keygen`, and `direnv` are installed.

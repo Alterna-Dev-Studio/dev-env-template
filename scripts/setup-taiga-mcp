@@ -4,6 +4,16 @@
 set -euo pipefail
 
 checkout="${PYTAIGA_MCP_HOME:-${HOME}/work/utils/pytaiga-mcp}"
+# Match the launcher: expand a leading ~ and require an absolute path.
+tilde="~"
+case $checkout in
+    "$tilde") checkout="$HOME" ;;
+    "$tilde"/*) checkout="$HOME/${checkout#"$tilde"/}" ;;
+esac
+case $checkout in
+    /*) ;;
+    *) echo "setup-taiga-mcp: PYTAIGA_MCP_HOME must be an absolute path, not $checkout" >&2; exit 1 ;;
+esac
 repository="https://github.com/Alterna-Dev-Studio/pytaiga-mcp.git"
 
 if ! command -v git >/dev/null; then
