@@ -6,7 +6,7 @@ A small, reusable home for shared development-tool configuration. Secrets live i
 
 You end up with your own private copy of this repository on GitHub, cloned to your machine and set up.
 
-1. Install the [GitHub CLI](https://cli.github.com/) and sign in with `gh auth login`. Setup also needs `sops`, `age`, and `direnv`. If any are missing it stops and tells you how to install them ([details](docs/secrets.md#prerequisites)).
+1. Install the [GitHub CLI](https://cli.github.com/) and sign in with `gh auth login`. Setup also needs `sops`, `age`, and `direnv`. If any are missing, setup stops before changing anything and prints how to install them; install them, then run `./scripts/setup` inside the clone ([details](docs/secrets.md#prerequisites)).
 2. `cd` to the folder that will hold your copy. The clone is created **inside the directory you run the command from**, not under your home directory. `~/work/utils` is the usual choice: the Taiga MCP server is installed next to it as `~/work/utils/pytaiga-mcp`, and MCP client entries point at the launcher by absolute path.
 
    ```bash

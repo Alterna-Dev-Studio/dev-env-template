@@ -88,7 +88,8 @@ def preflight():
     missing = [name for name in TOOLS if tool["locate"](name) is None]
     if missing:
         raise RuntimeError("missing required tools:\n"
-                           + "\n".join(f"  {name}: {TOOLS[name]}" for name in missing))
+                           + "\n".join(f"  {name}: {TOOLS[name]}" for name in missing)
+                           + f"\nNothing was changed. Install them, then run: cd {ROOT} && ./scripts/setup")
 
 
 def prompt_missing():

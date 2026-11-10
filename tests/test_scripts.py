@@ -600,7 +600,7 @@ class HelpAndPreflightTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertTrue(result.stderr.startswith("setup: missing required tools:"), result.stderr)
         for expected in ("sops:", "age-keygen:", "direnv:", "sudo apt install direnv",
-                         "getsops/sops/releases"):
+                         "getsops/sops/releases", f"then run: cd {repo} && ./scripts/setup"):
             self.assertIn(expected, result.stderr)
         for name in (".config", ".bashrc", ".profile"):
             self.assertFalse((self.home / name).exists(), name)
