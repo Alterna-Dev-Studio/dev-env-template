@@ -6,34 +6,32 @@ A small, reusable home for shared development-tool configuration. Secrets live i
 
 You end up with your own private copy of this repository on GitHub, cloned to your machine and set up.
 
-1. Install the [GitHub CLI](https://cli.github.com/) and sign in with `gh auth login`. Setup also needs `sops`, `age`, and `direnv`. If any are missing it stops and tells you how to install them ([details](docs/secrets.md#prerequisites)).
+1. Install the [GitHub CLI](https://cli.github.com/) and sign in with `gh auth login`. Setup also needs `sops`, `age`, and `direnv`. If any are missing, setup stops before changing anything and prints how to install them; install them, then run `./scripts/setup` inside the clone ([details](docs/secrets.md#prerequisites)).
 2. `cd` to the folder that will hold your copy. The clone is created **inside the directory you run the command from**, not under your home directory. `~/work/utils` is the usual choice: the Taiga MCP server is installed next to it as `~/work/utils/pytaiga-mcp`, and MCP client entries point at the launcher by absolute path.
 
    ```bash
    mkdir -p ~/work/utils && cd ~/work/utils
    ```
 
-3. Install the extension once, then create your copy. Replace `my-dev-env` with the name you want for your repository; it becomes the folder name too (here `~/work/utils/my-dev-env`):
+3. Create your copy and run setup. Replace `my-dev-env` with the name you want for your repository; it becomes the folder name too (here `~/work/utils/my-dev-env`). `gh dev-env` creates the private repository from this template, clones it, and then runs `./scripts/setup` inside the clone:
 
    ```bash
    gh extension install Alterna-Dev-Studio/gh-dev-env
    gh dev-env my-dev-env
    ```
 
-   Already have a copy on GitHub? Clone it into the same folder instead and run `./scripts/setup` there.
+   Already have a copy on GitHub, or prefer not to use the extension? Clone it and run setup yourself:
 
-4. Answer the prompts. Setup asks for your Taiga URL, username, and password, and the password is not shown as you type.
+   ```bash
+   git clone git@github.com:YOUR-USER/my-dev-env.git
+   cd my-dev-env && ./scripts/setup
+   ```
+
+4. Answer setup's prompts: your Taiga URL, username, and password (the password is not shown as you type). Setup then creates the vault and your age key, adds the profile to your Bash startup files, and installs the Taiga MCP server if `uv` is present.
 5. Back up the key file that setup prints at the end. Without it you cannot decrypt your secrets.
 6. Open a new terminal. Your credentials and tool paths are now loaded.
 
-`gh dev-env` makes a private repository under your GitHub account from this template, clones it into `./my-dev-env` (relative to the current directory), and runs `./scripts/setup` inside it. To use an organization, give `owner/name`. Setup options such as `--skip-taiga-mcp` go after the name. Without the extension, these two commands do the same thing:
-
-```bash
-gh repo create my-dev-env --template Alterna-Dev-Studio/dev-env-template --private --clone
-cd my-dev-env && ./scripts/setup
-```
-
-Setup also adds a few lines to your Bash startup files, allows the clone's `.envrc`, and installs the Taiga MCP server if `uv` is present. Running it again is safe.
+`gh dev-env` works for an organization too: give `owner/name`. Setup options such as `--skip-taiga-mcp` go after the name. Without the extension, `gh repo create my-dev-env --template Alterna-Dev-Studio/dev-env-template --private --clone` followed by `cd my-dev-env && ./scripts/setup` does the same thing. Setup also allows the clone's `.envrc`. Running it again is safe.
 
 ## Commands
 
