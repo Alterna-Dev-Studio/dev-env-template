@@ -390,6 +390,14 @@ class ScriptTests(unittest.TestCase):
         return dict(line.removeprefix("export ").split("=", 1)
                     for line in self.run_script("envtool", "export", scope).stdout.splitlines())
 
+    def test_envtool_hides_only_secret_values(self):
+        tool = __import__("runpy").run_path(str(ROOT / "scripts/envtool"))
+        for name in ("TAIGA_PASSWORD", "GH_TOKEN_FOR_CHECKS", "OPENROUTER_API_KEY",
+                     "PANGOLIN_SESSION_TOKEN", "STRIPE_SECRET"):
+            self.assertTrue(tool["is_secret"](name), name)
+        for name in ("TAIGA_API_URL", "TAIGA_USERNAME", "TAIGA_HOST", "DEV_HOME"):
+            self.assertFalse(tool["is_secret"](name), name)
+
     def test_pangolin_token_normalizes_share_links(self):
         cases = {
             "https://pangolin.example/s/abc123\n": "https://pangolin.example/s/abc123",

@@ -14,7 +14,7 @@ ENVTOOL = ("export", "set", "list", "edit", "init")
 PANGOLIN = ("pangolin-login", "pangolin-token", "pangolin-configure")
 COMMANDS = (
     ("export <scope>", "print `export NAME=value` lines for a vault scope"),
-    ("set <scope> NAME", "store one vault value, read with hidden input"),
+    ("set <scope> NAME", "store one vault value; secrets are read with hidden input"),
     ("list <scope>", "print the variable names in a scope, never the values"),
     ("edit <scope>", "open a scope in sops, which honors $EDITOR"),
     ("setup [options]", "install the profile and create the vault (./scripts/setup)"),
