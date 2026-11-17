@@ -64,9 +64,9 @@ def poll_device_auth(dashboard, code, deadline, interval=2.0, opener=urllib.requ
             return token.strip()
         message = str(payload.get("message", ""))
         if "expired" in message.lower() or "not found" in message.lower():
-            raise RuntimeError(f"device code {message.lower()}; run pangolin-login again")
+            raise RuntimeError(f"device code {message.lower()}; sign in again")
         if clock() >= deadline:
-            raise RuntimeError("device code expired before it was confirmed; run pangolin-login again")
+            raise RuntimeError("device code expired before it was confirmed; sign in again")
         sleep(interval)
 
 
