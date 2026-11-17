@@ -24,6 +24,8 @@ application code, no F#, no .NET, and no CI test gate. See [README.md](README.md
 - Helpers: `scripts/taiga-story.sh <ref> [project] [--issue|--epic] [--with-tasks]` (default
   project 4) and `scripts/taiga-comment.sh <item-id> "<comment>" [--issue]`. Both read
   `TAIGA_API_URL`, `TAIGA_USERNAME`, `TAIGA_PASSWORD` from the environment and never print them.
+  Behind Pangolin they get a session cookie from `scripts/taiga-session` (needs the PANGOLIN_*
+  settings and the pytaiga-mcp checkout); on a network that reaches Taiga directly it is a no-op.
 - MCP: `.mcp.json` launches `scripts/taiga-mcp full` (pytaiga-mcp in **full** mode, stdio)
   for Claude Code in this repository, overriding any user-level `workflow` server. The installed
   Claude skill bodies and their `mcp__taiga-py__*` grants are written against full mode

@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""Write a cookie jar that lets Taiga REST scripts reach Taiga through Pangolin.
+
+usage: taiga-session --cookie-jar PATH [--host URL]
+
+Pass the jar to `curl -b PATH` (or load it with http.cookiejar.MozillaCookieJar and
+ignore_discard=True). It is written with mode 0600 and nothing is printed on stdout.
+Pangolin settings (PANGOLIN_*) and TAIGA_API_URL come from the environment, as for
+scripts/taiga-mcp. Without any Pangolin credential the jar is empty and pytaiga-mcp is
+not needed; otherwise the pytaiga-mcp checkout (PYTAIGA_MCP_HOME, default
+~/work/utils/pytaiga-mcp) performs the handshake, and the jar is also empty when Taiga
+is not behind Pangolin from this network.
+"""
+import argparse
+import os
+from pathlib import Path
+import sys
+import tempfile
+
+CREDENTIALS = ("PANGOLIN_SESSION_TOKEN", "PANGOLIN_RESOURCE_TOKEN",
+               "PANGOLIN_ACCESS_TOKEN_ID", "PANGOLIN_ACCESS_TOKEN")
+PANGOLIN_NAMES = CREDENTIALS + ("PANGOLIN_SESSION_REQUEST_PARAM", "PANGOLIN_DASHBOARD_URL",
+                                "PANGOLIN_SESSION_COOKIE")
+
+
+def write_empty(path):
+    fd, temporary = tempfile.mkstemp(prefix=".cookies-", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w") as output:
+            output.write("# Netscape HTTP Cookie File\n")
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def main():
+    parser = argparse.ArgumentParser(prog="taiga-session", description=__doc__.split("\n")[0])
+    parser.add_argument("--cookie-jar", required=True, type=Path, help="file to write (mode 0600)")
+    parser.add_argument("--host", help="Taiga origin (default: $TAIGA_API_URL)")
+    args = parser.parse_args()
+    path = args.cookie_jar.expanduser().absolute()
+    if not path.parent.is_dir():
+        raise RuntimeError(f"directory {path.parent} does not exist")
+    if not any(os.environ.get(name) for name in CREDENTIALS):
+        write_empty(path)
+        return
+    if not os.environ.get("TAIGA_API_URL"):
+        raise RuntimeError("TAIGA_API_URL is required")
+
+    server_root = Path(os.environ.get("PYTAIGA_MCP_HOME") or Path.home() / "work/utils/pytaiga-mcp").expanduser()
+    if not server_root.is_absolute():
+        raise RuntimeError(f"PYTAIGA_MCP_HOME must be an absolute path, not {server_root}")
+    python = server_root / ".venv/bin/python"
+    if not python.is_file():
+        raise RuntimeError(f"Install pytaiga-mcp and its virtual environment at {server_root} (run dv taiga-mcp install)")
+    if not (server_root / "src/pangolin_cookies.py").is_file():
+        raise RuntimeError(f"pytaiga-mcp at {server_root} is too old for taiga-session; "
+                           f"run: git -C {server_root} pull && dv taiga-mcp install")
+
+    # The checkout may have a legacy .env; explicit (possibly empty) values take precedence.
+    for name in PANGOLIN_NAMES:
+        os.environ[name] = os.environ.get(name, "")
+    command = [str(python), "-m", "src.pangolin_cookies", "--cookie-jar", str(path)]
+    if args.host:
+        command += ["--host", args.host]
+    os.chdir(server_root)
+    os.execv(str(python), command)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (RuntimeError, OSError) as error:
+        print(f"taiga-session: {error}", file=sys.stderr)
+        sys.exit(1)
