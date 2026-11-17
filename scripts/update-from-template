@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+# Merge the latest dev-env-template into this copy on a template-sync branch.
+# Nothing is pushed; review the branch, run the tests, then push it and open a PR.
+set -euo pipefail
+
+usage() {
+    cat <<'EOF'
+usage: update-from-template [--url URL] [--ref REF] [--base COMMIT]
+
+Fetch the template into a `template` remote and merge it into a new
+`template-sync` branch made from the current branch. Nothing is pushed.
+
+  --url URL      template repository (default: $DEV_ENV_TEMPLATE_URL, else
+                 https://github.com/Alterna-Dev-Studio/dev-env-template.git)
+  --ref REF      template branch or tag to merge (default: main)
+  --base COMMIT  template commit this copy started from; only used on the first
+                 sync, when the histories are unrelated and no template commit
+                 matches this copy's first commit
+
+After the first sync the histories are linked and later syncs are ordinary merges.
+EOF
+}
+
+die() { echo "update-from-template: $*" >&2; exit 1; }
+
+url="${DEV_ENV_TEMPLATE_URL:-https://github.com/Alterna-Dev-Studio/dev-env-template.git}"
+url_given=""
+ref="main"
+base=""
+while [ $# -gt 0 ]; do
+    case $1 in
+        --url) [ $# -ge 2 ] || die "--url needs a value"; url="$2"; url_given=1; shift 2 ;;
+        --ref) [ $# -ge 2 ] || die "--ref needs a value"; ref="$2"; shift 2 ;;
+        --base) [ $# -ge 2 ] || die "--base needs a value"; base="$2"; shift 2 ;;
+        -h|--help) usage; exit 0 ;;
+        *) usage >&2; exit 2 ;;
+    esac
+done
+
+cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
+
+# Compare remotes as owner/name so SSH, HTTPS and .git spellings match.
+repo_id() { sed -E 's#^(git@[^:]+:|[a-z+]+://([^@/]+@)?[^/]+/)##; s#\.git$##; s#/+$##' <<<"$1"; }
+origin="$(git remote get-url origin 2>/dev/null || true)"
+if [ -n "$origin" ] && [ "$(repo_id "$origin")" = "$(repo_id "$url")" ]; then
+    die "this is the template itself; run it in a copy made from the template"
+fi
+
+git rev-parse --verify -q MERGE_HEAD >/dev/null && die "a merge is already in progress; finish or abort it first"
+[ -z "$(git status --porcelain)" ] || die "commit or stash your changes first"
+branch="template-sync"
+git rev-parse --verify -q "refs/heads/$branch" >/dev/null &&
+    die "branch $branch already exists; merge or delete it first"
+
+if git remote get-url template >/dev/null 2>&1; then
+    [ -z "$url_given" ] || git remote set-url template "$url"
+else
+    git remote add template "$url"
+fi
+git fetch --quiet --no-tags template "$ref"
+target="$(git rev-parse FETCH_HEAD)"
+short="$(git rev-parse --short "$target")"
+
+if git merge-base --is-ancestor "$target" HEAD; then
+    echo "Already up to date with template $ref ($short)."
+    exit 0
+fi
+
+message="Merge dev-env-template $ref ($short)"
+git switch --quiet -c "$branch"
+
+if git merge-base HEAD "$target" >/dev/null; then
+    status=0
+    git merge --quiet --no-ff --no-edit -m "$message" "$target" || status=$?
+else
+    # First sync. A copy made with `gh repo create --template` starts from a commit whose
+    # tree equals some template commit; use that commit as the merge base.
+    if [ -z "$base" ]; then
+        roots="$(git rev-list --max-parents=0 HEAD | xargs -I{} git rev-parse '{}^{tree}')"
+        base="$(git log --format='%H %T' "$target" |
+                awk 'NR==FNR { want[$1]; next } ($2 in want) { print $1; exit }' <(echo "$roots") -)"
+    else
+        base="$(git rev-parse --verify -q "$base^{commit}")" || die "--base is not a commit"
+    fi
+    status=0
+    if [ -n "$base" ]; then
+        echo "First sync: merging from template commit $(git rev-parse --short "$base")."
+        git merge-recursive "$base" -- HEAD "$target" >/dev/null || status=$?
+        # Record the template as the second parent so later syncs are ordinary merges.
+        echo "$target" >"$(git rev-parse --git-path MERGE_HEAD)"
+        echo "$message" >"$(git rev-parse --git-path MERGE_MSG)"
+        [ "$status" -ne 0 ] || git commit --quiet --no-edit
+    else
+        echo "First sync: no common template commit found, so every file both sides changed"
+        echo "will conflict. Pass --base COMMIT to merge from the template commit you started at."
+        git merge --quiet --no-ff --no-edit --allow-unrelated-histories -m "$message" "$target" || status=$?
+    fi
+fi
+
+if [ "$status" -ne 0 ]; then
+    echo
+    echo "Conflicts on branch $branch:"
+    git diff --name-only --diff-filter=U | sed 's/^/  /'
+    echo "Resolve them, then: git add <files> && git commit --no-edit"
+    echo "To give up: git merge --abort && git switch - && git branch -D $branch"
+    exit 1
+fi
+
+echo "Merged template $ref ($short) into branch $branch. Next:"
+echo "  python3 -m unittest discover -s tests -v"
+echo "  git push -u origin $branch && gh pr create --fill"

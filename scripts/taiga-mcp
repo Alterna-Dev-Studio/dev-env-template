@@ -21,7 +21,9 @@ def main():
     scope = sys.argv[2] if len(sys.argv) == 3 else None
 
     root = Path(__file__).resolve().parent.parent
-    server_root = Path(os.environ.get("PYTAIGA_MCP_HOME") or Path.home() / "work/utils/pytaiga-mcp")
+    server_root = Path(os.environ.get("PYTAIGA_MCP_HOME") or Path.home() / "work/utils/pytaiga-mcp").expanduser()
+    if not server_root.is_absolute():
+        raise RuntimeError(f"PYTAIGA_MCP_HOME must be an absolute path, not {server_root}")
     python = server_root / ".venv/bin/python"
     server = server_root / "src" / f"server_{sys.argv[1]}.py"
     if not python.is_file() or not server.is_file():

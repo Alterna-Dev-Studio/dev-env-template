@@ -10,7 +10,7 @@
 `~/work/utils/pytaiga-mcp` and runs `uv sync --frozen` there. It requires `git` and `uv`.
 
 - Set `PYTAIGA_MCP_HOME` to use another location. The launcher reads the same variable, so
-  the MCP client must see it too.
+  the MCP client must see it too. It must be an absolute path; a leading `~` is expanded.
 - If the directory already exists it must be a pytaiga-mcp checkout (`pyproject.toml`,
   `uv.lock`, `src/server_workflow.py`, and `src/server_full.py`). Otherwise the script
   refuses and changes nothing.

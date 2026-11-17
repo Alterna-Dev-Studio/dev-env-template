@@ -28,7 +28,7 @@ class ScriptTests(unittest.TestCase):
         self.home.mkdir()
         self.repo = self.tmp / "repo"
         (self.repo / "scripts").mkdir(parents=True)
-        for name in ("envtool", "setup", "setup-taiga-mcp", "taiga-mcp", *('pangolin-token', 'pangolin-configure', 'pangolin-login')):
+        for name in ("envtool", "setup", "setup-taiga-mcp", "taiga-mcp", "update-from-template", *('pangolin-token', 'pangolin-configure', 'pangolin-login')):
             shutil.copy2(ROOT / "scripts" / name, self.repo / "scripts" / name)
         shutil.copy2(ROOT / "profile.sh", self.repo / "profile.sh")
         shutil.copy2(ROOT / ".envrc", self.repo / ".envrc")
@@ -219,6 +219,7 @@ class ScriptTests(unittest.TestCase):
         result = self.run_dv("taiga-mcp", check=False)
         self.assertEqual(result.returncode, 1)
         self.assertIn("usage: taiga-mcp workflow|full", result.stderr)
+        self.assertIn("--base COMMIT", self.run_dv("update", "--help").stdout)
         result = self.run_dv("bogus", check=False)
         self.assertEqual(result.returncode, 2)
         self.assertIn("dv: unknown command 'bogus'", result.stderr)
@@ -341,6 +342,29 @@ class ScriptTests(unittest.TestCase):
         self.assertIsNone(shutil.which("codex", path=self.env["PATH"]))
         result = self.run_script("setup-taiga-mcp")
         self.assertIn("codex is not on PATH", result.stdout)
+
+    def test_setup_taiga_mcp_expands_tilde_and_rejects_relative_paths(self):
+        checkout, _, uv_log, _ = self.fake_taiga_mcp()
+        target = self.home / "pytaiga-mcp"
+        checkout.rename(target)
+        self.env["PYTAIGA_MCP_HOME"] = "~/pytaiga-mcp"
+        self.run_script("setup-taiga-mcp")
+        self.assertEqual(uv_log.read_text(), f"sync --frozen --directory {target}\n")
+
+        self.env["PYTAIGA_MCP_HOME"] = "relative/pytaiga-mcp"
+        result = self.run_script("setup-taiga-mcp", check=False)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("PYTAIGA_MCP_HOME must be an absolute path", result.stderr)
+        self.assertFalse((self.repo / "relative").exists())
+
+    def test_taiga_mcp_rejects_relative_pytaiga_mcp_home(self):
+        self.env["PYTAIGA_MCP_HOME"] = "relative/pytaiga-mcp"
+        result = self.run_script("taiga-mcp", "full", check=False)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("PYTAIGA_MCP_HOME must be an absolute path, not relative/pytaiga-mcp", result.stderr)
+        self.env["PYTAIGA_MCP_HOME"] = "~/elsewhere"
+        result = self.run_script("taiga-mcp", "full", check=False)
+        self.assertIn(f"at {self.home / 'elsewhere'} (run scripts/setup-taiga-mcp)", result.stderr)
 
     def test_setup_runs_taiga_mcp_install_when_uv_present(self):
         checkout, shims, uv_log, codex_log = self.fake_taiga_mcp()
@@ -577,7 +601,7 @@ class HelpAndPreflightTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue(result.stdout.startswith(f"usage: {name} COMMAND"), result.stdout)
             for command in ("export", "set", "list", "edit", "setup", "taiga-mcp install",
-                            "taiga-mcp workflow|full"):
+                            "taiga-mcp workflow|full", "update"):
                 self.assertIn(command, result.stdout)
             self.assertNotIn("init", result.stdout)
             bare = subprocess.run([str(ROOT / "bin" / name)], env=self.env, stdin=subprocess.DEVNULL,
