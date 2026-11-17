@@ -44,6 +44,7 @@ You end up with your own private copy of this repository on GitHub, cloned to yo
 | `dv list <scope>` | Lists variable names only |
 | `dv taiga-mcp install` | Installs the Taiga MCP server |
 | `dv taiga-mcp workflow\|full [scope]` | Launches the Taiga MCP server |
+| `dv taiga-login [scope]` | Signs in to Pangolin for Taiga and stores the session; run it again when it expires |
 | `dv pangolin-login --dashboard-url URL` | Signs in to Pangolin in your browser; prints a session token |
 | `dv pangolin-token` | Checks a pasted Pangolin Share Link; prints its token |
 | `dv pangolin-configure <scope> --stdin [--session --dashboard-url URL]` | Stores a piped Pangolin token in a scope |

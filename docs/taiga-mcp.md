@@ -57,34 +57,38 @@ change.
 
 ### Your own login
 
-Replace `https://pangolin.example` with the address of the page where you sign in to Pangolin.
+```bash
+dv taiga-login
+```
 
-1. Run both commands as one pipeline. `--stdin` is required when piping:
-
-   ```bash
-   dv pangolin-login --dashboard-url https://pangolin.example | dv pangolin-configure profile --session --dashboard-url https://pangolin.example --stdin
-   ```
-
-2. A browser tab opens on Pangolin's confirm page showing a short device code. The same code
-   and URL are printed in the terminal. Sign in with your usual account (password, 2FA, or your
+1. It picks the vault scope: `$TAIGA_VAULT_SCOPE` if set, else the only scope that already
+   holds Pangolin settings or a Taiga login. If several do, it lists them and asks; or name one,
+   `dv taiga-login project/<name>`.
+2. It finds the Pangolin dashboard: the scope's `PANGOLIN_DASHBOARD_URL` from an earlier login,
+   else where Taiga redirects (off the LAN). Only on a first login from a network that reaches
+   Taiga directly does it ask for the address of the page where you sign in to Pangolin.
+3. A browser tab opens on Pangolin's confirm page showing a short device code. The same code and
+   URL are printed in the terminal. Sign in with your usual account (password, 2FA, or your
    company identity provider) and confirm the code. It expires in a few minutes.
-3. Success prints `Saved PANGOLIN_SESSION_TOKEN and PANGOLIN_DASHBOARD_URL in profile. Restart
-   the Taiga MCP server to use it.` Restart the server and you are done.
+4. Success prints `Saved your Pangolin session in <scope>.` Restart Claude Code or Codex (the
+   Taiga MCP server); REST scripts pick it up on their next run.
 
-The token is the only thing on stdout, so the pipe keeps it off your screen. The session lasts
-30 days and renews each time it is used. It ends if you log out of Pangolin or an admin revokes
-it. For a project scope, replace `profile` with `project/<name>`.
+The session lasts 30 days and renews each time it is used. It ends if you log out of Pangolin or
+an admin revokes it; then run `dv taiga-login` again. The token is never printed.
 
 - `--no-browser` stops the tab opening; copy the printed URL yourself (useful over SSH).
+- `--dashboard-url URL` sets the dashboard explicitly; it is remembered in the scope.
 - On a network that reaches Taiga directly, the server logs `Taiga is not behind Pangolin from
   this network; skipping` and logs in to Taiga as usual. Nothing to do.
+- For scripting, the two steps are still available separately:
+  `dv pangolin-login --dashboard-url URL | dv pangolin-configure <scope> --session --dashboard-url URL --stdin`.
 
 When it breaks:
 
 - `Pangolin session expired or has no access to this resource; run pangolin-login again`
-  (in the MCP server's log): rerun step 1. If it fails again right after a fresh login, your Pangolin account cannot open
+  (in the MCP server's log or from a REST script): run `dv taiga-login` again. If it fails again right after a fresh login, your Pangolin account cannot open
   Taiga; ask an admin.
-- `device code expired before it was confirmed`: rerun step 1 and confirm sooner.
+- `device code expired before it was confirmed`: run `dv taiga-login` again and confirm sooner.
 - `interactive input is unavailable; use --stdin`: you piped into `pangolin-configure`
   without `--stdin`.
 
@@ -125,7 +129,7 @@ printed on stdout.
   `PYTAIGA_MCP_HOME` checkout), so it needs that checkout to be current.
 - The handshake runs on every call (about half a second); nothing is cached on disk.
 - `Pangolin session expired or has no access to this resource; run pangolin-login again`:
-  sign in again as above. `PANGOLIN_ACCESS_TOKEN*` header credentials are refused (exit 2);
+  run `dv taiga-login`. `PANGOLIN_ACCESS_TOKEN*` header credentials are refused (exit 2);
   store a session or Share Link instead.
 
 A project script outside this repository calls `"$DEV_ENV_HOME/scripts/taiga-session"`.
