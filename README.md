@@ -47,6 +47,7 @@ You end up with your own private copy of this repository on GitHub, cloned to yo
 | `dv pangolin-login --dashboard-url URL` | Signs in to Pangolin in your browser; prints a session token |
 | `dv pangolin-token` | Checks a pasted Pangolin Share Link; prints its token |
 | `dv pangolin-configure <scope> --stdin [--session --dashboard-url URL]` | Stores a piped Pangolin token in a scope |
+| `dv taiga-session --cookie-jar PATH` | Writes a Pangolin cookie jar for Taiga REST scripts (`curl -b PATH`) |
 | `./scripts/taiga-story.sh` | Fetches a Taiga story |
 | `./scripts/taiga-comment.sh` | Comments on a Taiga item |
 | `dv update` | Merges the latest template into a `template-sync` branch of your copy |

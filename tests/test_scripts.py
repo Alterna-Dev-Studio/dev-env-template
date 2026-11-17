@@ -28,7 +28,7 @@ class ScriptTests(unittest.TestCase):
         self.home.mkdir()
         self.repo = self.tmp / "repo"
         (self.repo / "scripts").mkdir(parents=True)
-        for name in ("envtool", "setup", "setup-taiga-mcp", "taiga-mcp", "update-from-template", *('pangolin-token', 'pangolin-configure', 'pangolin-login')):
+        for name in ("envtool", "setup", "setup-taiga-mcp", "taiga-mcp", "taiga-session", "taiga-story.sh", "taiga-comment.sh", "update-from-template", *('pangolin-token', 'pangolin-configure', 'pangolin-login')):
             shutil.copy2(ROOT / "scripts" / name, self.repo / "scripts" / name)
         shutil.copy2(ROOT / "profile.sh", self.repo / "profile.sh")
         shutil.copy2(ROOT / ".envrc", self.repo / ".envrc")
@@ -201,6 +201,140 @@ class ScriptTests(unittest.TestCase):
         result = self.run_script("taiga-mcp", check=False)
         self.assertEqual(result.returncode, 1)
         self.assertIn("usage:", result.stderr)
+
+    def fake_cookie_checkout(self):
+        """A pytaiga-mcp checkout whose pangolin_cookies records how it was run."""
+        checkout = self.tmp / "pytaiga-mcp"
+        (checkout / ".venv/bin").mkdir(parents=True)
+        (checkout / ".venv/bin/python").symlink_to(shutil.which("python3"))
+        (checkout / "src").mkdir()
+        (checkout / "src/__init__.py").touch()
+        (checkout / "src/pangolin_cookies.py").write_text(
+            "import json, os, sys\n"
+            "names = [n for n in os.environ if n.startswith('PANGOLIN_')]\n"
+            "print(json.dumps({'argv': sys.argv[1:], 'cwd': os.getcwd(), 'pangolin': sorted(names),"
+            " 'host': os.environ.get('TAIGA_API_URL')}))\n")
+        self.env["PYTAIGA_MCP_HOME"] = str(checkout)
+        return checkout
+
+    def test_taiga_session_without_pangolin_writes_empty_jar_without_checkout(self):
+        self.env["PYTAIGA_MCP_HOME"] = str(self.tmp / "absent")
+        jar = self.tmp / "jar"
+        jar.write_text("old")
+        jar.chmod(0o644)
+        result = self.run_script("taiga-session", "--cookie-jar", str(jar))
+        self.assertEqual((result.stdout, result.stderr), ("", ""))
+        self.assertEqual(jar.read_text(), "# Netscape HTTP Cookie File\n")
+        self.assertEqual(jar.stat().st_mode & 0o777, 0o600)
+
+    def test_taiga_session_runs_pangolin_cookies_in_the_checkout(self):
+        checkout = self.fake_cookie_checkout()
+        self.env.update(TAIGA_API_URL="https://taiga.example", PANGOLIN_SESSION_TOKEN="tok")
+        result = self.run_script("taiga-session", "--cookie-jar", "jar", "--host", "https://taiga.example")
+        ran = __import__("json").loads(result.stdout)
+        self.assertEqual(ran["argv"], ["--cookie-jar", str(self.repo / "jar"), "--host", "https://taiga.example"])
+        self.assertEqual(ran["cwd"], str(checkout))
+        self.assertEqual(ran["host"], "https://taiga.example")
+        # Every Pangolin name is set, empty if unset, so the checkout's .env cannot supply one.
+        self.assertEqual(ran["pangolin"], sorted([
+            "PANGOLIN_SESSION_TOKEN", "PANGOLIN_RESOURCE_TOKEN", "PANGOLIN_ACCESS_TOKEN_ID",
+            "PANGOLIN_ACCESS_TOKEN", "PANGOLIN_SESSION_REQUEST_PARAM", "PANGOLIN_DASHBOARD_URL",
+            "PANGOLIN_SESSION_COOKIE"]))
+        self.assertIn("taiga-session", self.run_dv("--help").stdout)
+        self.assertEqual(__import__("json").loads(
+            self.run_dv("taiga-session", "--cookie-jar", str(self.tmp / "j")).stdout)["cwd"], str(checkout))
+
+    def test_taiga_session_reports_missing_or_old_checkout(self):
+        self.env.update(TAIGA_API_URL="https://taiga.example", PANGOLIN_SESSION_TOKEN="secret-token")
+        jar = str(self.tmp / "jar")
+        for home, expected in ((str(self.tmp / "absent"), "run dv taiga-mcp install"),
+                               ("relative/dir", "must be an absolute path")):
+            self.env["PYTAIGA_MCP_HOME"] = home
+            result = self.run_script("taiga-session", "--cookie-jar", jar, check=False)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(expected, result.stderr)
+            self.assertNotIn("secret-token", result.stderr + result.stdout)
+        checkout = self.fake_cookie_checkout()
+        (checkout / "src/pangolin_cookies.py").unlink()
+        result = self.run_script("taiga-session", "--cookie-jar", jar, check=False)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("too old for taiga-session", result.stderr)
+        self.assertFalse((self.tmp / "jar").exists())
+
+    def fake_taiga(self, auth_status=200, auth_body={"auth_token": "tkn"}):
+        """A loopback Taiga that records each request's method, path, headers and body."""
+        requests = []
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def respond(self, status, body):
+                data = __import__("json").dumps(body).encode() if body is not None else b""
+                self.send_response(status)
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+            def handle_any(self):
+                length = int(self.headers.get("Content-Length") or 0)
+                body = self.rfile.read(length).decode() if length else ""
+                requests.append((self.command, self.path, dict(self.headers), body))
+                if self.path == "/api/v1/auth":
+                    self.respond(auth_status, auth_body)
+                elif self.path.startswith("/api/v1/userstories/by_ref"):
+                    self.respond(200, {"id": 7, "ref": 3, "subject": "s", "version": 1})
+                elif self.path.startswith("/api/v1/tasks"):
+                    self.respond(200, [{"id": 1, "ref": 4, "subject": "t", "status": 1,
+                                        "status_extra_info": {}, "is_closed": False}])
+                elif self.path == "/api/v1/userstories/7":
+                    self.respond(200, {"id": 7, "version": 5})
+                else:
+                    self.respond(404, {})
+
+            do_GET = do_POST = do_PATCH = handle_any
+
+        server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        self.env.update(TAIGA_API_URL=f"http://127.0.0.1:{server.server_port}",
+                        TAIGA_USERNAME="u", TAIGA_PASSWORD='p"w\\d', TMPDIR=str(self.tmp))
+        # A taiga-session that stores one cookie, as Pangolin's handshake would.
+        (self.repo / "scripts/taiga-session").write_text(
+            "#!/bin/sh\nprintf '# Netscape HTTP Cookie File\\n127.0.0.1\\tFALSE\\t/\\tFALSE\\t0\\tpsess\\tcookie-value\\n'"
+            " > \"$2\"\n")
+        return requests
+
+    def test_taiga_story_sends_pangolin_cookie_and_keeps_secrets_out_of_argv(self):
+        requests = self.fake_taiga()
+        result = self.run_script("taiga-story.sh", "3", "36", "--with-tasks")
+        out = __import__("json").loads(result.stdout)
+        self.assertEqual((out["id"], len(out["tasks"])), (7, 1))
+        self.assertEqual([r[1].split("?")[0] for r in requests],
+                         ["/api/v1/auth", "/api/v1/userstories/by_ref", "/api/v1/tasks"])
+        for _, _, headers, _ in requests:
+            self.assertEqual(headers.get("Cookie"), "psess=cookie-value")
+        auth = __import__("json").loads(requests[0][3])
+        self.assertEqual(auth, {"type": "normal", "username": "u", "password": 'p"w\\d'})
+        self.assertEqual(requests[1][2]["Authorization"], "Bearer tkn")
+        self.assertEqual(sorted(p.name for p in self.tmp.iterdir() if p.name.startswith("tmp")), [])
+
+    def test_taiga_comment_patches_with_cookie_and_version(self):
+        requests = self.fake_taiga()
+        result = self.run_script("taiga-comment.sh", "7", 'say "hi"')
+        self.assertIn("Comment posted successfully", result.stdout)
+        method, path, headers, body = requests[-1]
+        self.assertEqual((method, path), ("PATCH", "/api/v1/userstories/7"))
+        self.assertEqual(__import__("json").loads(body), {"comment": 'say "hi"', "version": 5})
+        self.assertEqual(headers.get("Cookie"), "psess=cookie-value")
+
+    def test_taiga_story_explains_an_empty_pangolin_401(self):
+        self.fake_taiga(auth_status=401, auth_body=None)
+        result = self.run_script("taiga-story.sh", "3", "36", check=False)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Taiga auth failed: HTTP 401", result.stderr)
+        self.assertIn("Pangolin refusing the request", result.stderr)
 
     def run_dv(self, *args, check=True):
         """Run the dispatcher through its `dv` symlink from outside the checkout."""
@@ -601,7 +735,7 @@ class HelpAndPreflightTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue(result.stdout.startswith(f"usage: {name} COMMAND"), result.stdout)
             for command in ("export", "set", "list", "edit", "setup", "taiga-mcp install",
-                            "taiga-mcp workflow|full", "update"):
+                            "taiga-mcp workflow|full", "taiga-session", "update"):
                 self.assertIn(command, result.stdout)
             self.assertNotIn("init", result.stdout)
             bare = subprocess.run([str(ROOT / "bin" / name)], env=self.env, stdin=subprocess.DEVNULL,

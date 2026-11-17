@@ -23,6 +23,7 @@ COMMANDS = (
     ("pangolin-login --dashboard-url URL", "sign in to Pangolin with a device code; print the token"),
     ("pangolin-token [options]", "paste an admin-created Pangolin Share Link; print the token"),
     ("pangolin-configure <scope> [options]", "store a Pangolin token in a vault scope"),
+    ("taiga-session --cookie-jar PATH", "write a Pangolin cookie jar for Taiga REST scripts (curl -b PATH)"),
     ("update [options]", "merge the latest template into a template-sync branch"),
 )
 
@@ -44,7 +45,7 @@ def main(argv):
     command, rest = argv[0], argv[1:]
     if command in ENVTOOL:
         target, args = SCRIPTS / "envtool", [command, *rest]
-    elif command in ("setup", "setup-taiga-mcp", "taiga-mcp", *PANGOLIN):
+    elif command in ("setup", "setup-taiga-mcp", "taiga-mcp", "taiga-session", *PANGOLIN):
         target, args = SCRIPTS / command, rest
         if command == "taiga-mcp" and rest[:1] == ["install"]:
             target, args = SCRIPTS / "setup-taiga-mcp", rest[1:]

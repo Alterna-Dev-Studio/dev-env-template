@@ -111,6 +111,25 @@ opens one protected site without a user login.
 The scripts are `./scripts/pangolin-login`, `./scripts/pangolin-token`, and
 `./scripts/pangolin-configure` when the profile is not loaded.
 
+## REST scripts behind Pangolin
+
+`scripts/taiga-story.sh`, `scripts/taiga-comment.sh` and project scripts that call the Taiga
+REST API directly need the same Pangolin credential. `dv taiga-session --cookie-jar PATH`
+(`./scripts/taiga-session`) writes a cookie jar (mode 0600) for `curl -b PATH`, or for
+Python's `http.cookiejar.MozillaCookieJar` loaded with `ignore_discard=True`. Nothing is
+printed on stdout.
+
+- With no Pangolin credential in the environment, or on a network that reaches Taiga
+  directly, the jar is empty and the scripts behave as before.
+- Otherwise it runs pytaiga-mcp's own handshake (`python -m src.pangolin_cookies` in the
+  `PYTAIGA_MCP_HOME` checkout), so it needs that checkout to be current.
+- The handshake runs on every call (about half a second); nothing is cached on disk.
+- `Pangolin session expired or has no access to this resource; run pangolin-login again`:
+  sign in again as above. `PANGOLIN_ACCESS_TOKEN*` header credentials are refused (exit 2);
+  store a session or Share Link instead.
+
+A project script outside this repository calls `"$DEV_ENV_HOME/scripts/taiga-session"`.
+
 ## Modes
 
 - `full` is the complete tool set (`get_user_story`, `get_user_story_statuses`,
