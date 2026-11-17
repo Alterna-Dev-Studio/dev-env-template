@@ -28,14 +28,14 @@ class ScriptTests(unittest.TestCase):
         self.home.mkdir()
         self.repo = self.tmp / "repo"
         (self.repo / "scripts").mkdir(parents=True)
-        for name in ("envtool", "setup", "setup-taiga-mcp", "taiga-mcp", "taiga-session", "taiga-story.sh", "taiga-comment.sh", "update-from-template", *('pangolin-token', 'pangolin-configure', 'pangolin-login')):
+        for name in ("envtool", "setup", "setup-taiga-mcp", "taiga-mcp", "taiga-session", "taiga-story.sh", "taiga-comment.sh", "update-from-template", *('pangolin-token', 'pangolin-configure', 'pangolin-login', 'taiga-login')):
             shutil.copy2(ROOT / "scripts" / name, self.repo / "scripts" / name)
         shutil.copy2(ROOT / "profile.sh", self.repo / "profile.sh")
         shutil.copy2(ROOT / ".envrc", self.repo / ".envrc")
         shutil.copytree(ROOT / "shell", self.repo / "shell")
         shutil.copytree(ROOT / "bin", self.repo / "bin", symlinks=True)
         self.env = {key: value for key, value in os.environ.items()
-                    if not key.startswith(("SOPS_", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "TAIGA_"))}
+                    if not key.startswith(("SOPS_", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "TAIGA_", "PANGOLIN_", "PYTAIGA_MCP_HOME"))}
         self.env["HOME"] = str(self.home)
         self.key = self.home / ".config/sops/age/keys.txt"
         self.bashrc = self.home / ".bashrc"
@@ -638,6 +638,67 @@ class ScriptTests(unittest.TestCase):
         self.assertIn(f"{dashboard}/auth/login/device?code=AB12-CD34", result.stderr)
         self.assertNotIn("sess10n", result.stderr)
 
+    def fake_taiga_front(self, redirect_to=None):
+        """Taiga's front page: a Pangolin redirect (off the LAN) or the page itself (on it)."""
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(302 if redirect_to else 200)
+                if redirect_to:
+                    self.send_header("Location", f"{redirect_to}/auth/resource/abc?redirect=x")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+            def log_message(self, *args):
+                pass
+
+        server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        return f"http://127.0.0.1:{server.server_port}"
+
+    def taiga_login(self, *args, check=True):
+        return self.run_script("taiga-login", *args, "--no-browser", "--poll-interval", "0.01", check=check)
+
+    def test_taiga_login_renews_the_session_in_the_named_scope(self):
+        self.run_script("setup")
+        dashboard, _ = self.fake_pangolin(polls_before_verified=1)
+        self.store("project/gg", {"TAIGA_API_URL": "https://taiga.example", "PANGOLIN_DASHBOARD_URL": dashboard,
+                                  "PANGOLIN_SESSION_TOKEN": "old", "PANGOLIN_RESOURCE_TOKEN": "id.secret"})
+        self.env["TAIGA_VAULT_SCOPE"] = "project/gg"
+        result = self.taiga_login()
+        self.assertIn("Saved your Pangolin session in project/gg", result.stdout)
+        self.assertIn("AB12-CD34", result.stderr)
+        self.assertNotIn("sess10n", result.stdout + result.stderr)
+        values = self.exported("project/gg")
+        self.assertEqual(values["PANGOLIN_SESSION_TOKEN"], "sess10n")
+        self.assertEqual(values["PANGOLIN_DASHBOARD_URL"], dashboard)
+        self.assertNotIn("PANGOLIN_RESOURCE_TOKEN", values)
+        self.assertEqual(values["TAIGA_API_URL"], "https://taiga.example")
+
+    def test_taiga_login_finds_the_scope_and_discovers_the_dashboard(self):
+        self.run_script("setup")
+        dashboard, _ = self.fake_pangolin(polls_before_verified=0)
+        self.store("project/gg", {"TAIGA_API_URL": self.fake_taiga_front(redirect_to=dashboard)})
+        self.env.pop("TAIGA_VAULT_SCOPE", None)
+        result = self.run_dv("taiga-login", "--no-browser", "--poll-interval", "0.01")
+        self.assertIn("for project/gg", result.stderr)
+        self.assertEqual(self.exported("project/gg")["PANGOLIN_DASHBOARD_URL"], dashboard)
+
+    def test_taiga_login_needs_a_choice_or_a_dashboard_when_it_cannot_tell(self):
+        self.run_script("setup")
+        self.env.pop("TAIGA_VAULT_SCOPE", None)
+        for scope in ("project/a", "project/b"):
+            self.store(scope, {"TAIGA_API_URL": "https://t.example", "PANGOLIN_DASHBOARD_URL": "https://p.example"})
+        result = self.taiga_login(check=False)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("several scopes hold Pangolin settings: project/a, project/b", result.stderr)
+        self.store("project/lan", {"TAIGA_API_URL": self.fake_taiga_front()})
+        result = self.taiga_login("project/lan", check=False)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("pass --dashboard-url", result.stderr)
+        self.assertNotIn("PANGOLIN_SESSION_TOKEN", self.exported("project/lan"))
+
     def test_pangolin_login_reports_expired_code(self):
         dashboard, _ = self.fake_pangolin(polls_before_verified=0, expired=True)
         result = self.run_script("pangolin-login", "--dashboard-url", dashboard, "--no-browser",
@@ -735,7 +796,7 @@ class HelpAndPreflightTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue(result.stdout.startswith(f"usage: {name} COMMAND"), result.stdout)
             for command in ("export", "set", "list", "edit", "setup", "taiga-mcp install",
-                            "taiga-mcp workflow|full", "taiga-session", "update"):
+                            "taiga-mcp workflow|full", "taiga-session", "taiga-login", "update"):
                 self.assertIn(command, result.stdout)
             self.assertNotIn("init", result.stdout)
             bare = subprocess.run([str(ROOT / "bin" / name)], env=self.env, stdin=subprocess.DEVNULL,

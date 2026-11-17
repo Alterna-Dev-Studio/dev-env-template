@@ -1,0 +1,134 @@
+#!/usr/bin/env python3
+"""Sign in to Pangolin for Taiga and store the session in a vault scope, in one step.
+
+usage: taiga-login [SCOPE] [--dashboard-url URL] [--no-browser]
+
+SCOPE defaults to $TAIGA_VAULT_SCOPE, else the only scope that already holds Pangolin
+settings (or a Taiga login); with several, it asks. The dashboard comes from the scope's
+PANGOLIN_DASHBOARD_URL, else from where Taiga redirects (off the LAN), else it asks once.
+Run it again whenever the session expires.
+"""
+import argparse
+import os
+from pathlib import Path
+import runpy
+import socket
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+import webbrowser
+
+ROOT = Path(__file__).resolve().parent.parent
+envtool = runpy.run_path(str(ROOT / "scripts/envtool"))
+login = runpy.run_path(str(ROOT / "scripts/pangolin-login"))
+configure = runpy.run_path(str(ROOT / "scripts/pangolin-configure"))
+
+
+def scopes():
+    found = ["profile"] if envtool["path_for"]("profile").is_file() else []
+    project = ROOT / "secrets/project"
+    if project.is_dir():
+        found += sorted(f"project/{p.name.removesuffix('.enc.json')}" for p in project.glob("*.enc.json"))
+    return found
+
+
+def choose(options, what):
+    if len(options) == 1:
+        return options[0]
+    if not sys.stdin.isatty():
+        raise RuntimeError(f"several scopes hold {what}: {', '.join(options)}; name one, e.g. taiga-login {options[0]}")
+    print(f"Which scope? (several hold {what})", file=sys.stderr)
+    for number, option in enumerate(options, 1):
+        print(f"  {number}. {option}", file=sys.stderr)
+    answer = input("Number: ").strip()
+    if not answer.isdigit() or not 1 <= int(answer) <= len(options):
+        raise RuntimeError("no scope chosen; nothing was changed")
+    return options[int(answer) - 1]
+
+
+def pick_scope(given):
+    if given or os.environ.get("TAIGA_VAULT_SCOPE"):
+        return given or os.environ["TAIGA_VAULT_SCOPE"]
+    values = {scope: envtool["decrypt"](scope) for scope in scopes()}
+    for what, names in (("Pangolin settings", ("PANGOLIN_DASHBOARD_URL", "PANGOLIN_RESOURCE_TOKEN")),
+                        ("a Taiga login", ("TAIGA_API_URL",))):
+        matches = [scope for scope, data in values.items() if any(data.get(n) for n in names)]
+        if matches:
+            return choose(matches, what)
+    raise RuntimeError("no vault scope holds TAIGA_API_URL; add one with: dv set profile TAIGA_API_URL")
+
+
+def discover_dashboard(taiga):
+    """Return the dashboard Taiga redirects to through Pangolin, or None (e.g. on the LAN)."""
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *args):
+            return None
+
+    request = urllib.request.Request(f"{taiga.rstrip('/')}/", headers={
+        "Accept": "text/html,application/xhtml+xml", "User-Agent": "Mozilla/5.0"})
+    try:
+        urllib.request.build_opener(NoRedirect).open(request, timeout=10).close()
+        return None
+    except urllib.error.HTTPError as error:
+        target = urllib.parse.urlsplit(error.headers.get("Location", ""))
+        if error.code in (301, 302, 303, 307, 308) and target.path.startswith("/auth/resource/"):
+            return f"{target.scheme}://{target.netloc}"
+    except (urllib.error.URLError, OSError):
+        pass
+    return None
+
+
+def pick_dashboard(given, values):
+    known = given or values.get("PANGOLIN_DASHBOARD_URL") or discover_dashboard(values["TAIGA_API_URL"])
+    if not known:
+        if not sys.stdin.isatty():
+            raise RuntimeError("could not find the Pangolin dashboard from this network; pass --dashboard-url URL")
+        known = input("Pangolin dashboard address (the page where you sign in, e.g. https://pangolin.example): ")
+    return login["dashboard_origin"](known)
+
+
+def main():
+    parser = argparse.ArgumentParser(prog="taiga-login", description=__doc__.split("\n")[0])
+    parser.add_argument("scope", nargs="?", help="profile or project/<name> (see above for the default)")
+    parser.add_argument("--dashboard-url", help="Pangolin dashboard origin; remembered in the scope")
+    parser.add_argument("--no-browser", action="store_true", help="do not open the confirm page")
+    parser.add_argument("--poll-interval", type=float, default=2.0, help=argparse.SUPPRESS)
+    args = parser.parse_args()
+
+    scope = pick_scope(args.scope)
+    envtool["path_for"](scope)
+    values = envtool["decrypt"](scope)
+    if not values.get("TAIGA_API_URL"):
+        raise RuntimeError(f"{scope} has no TAIGA_API_URL; add it with: dv set {scope} TAIGA_API_URL")
+    dashboard = pick_dashboard(args.dashboard_url, values)
+
+    print(f"Signing in to Pangolin at {dashboard} for {scope}.", file=sys.stderr)
+    code, expires = login["start_device_auth"](dashboard, "pytaiga-mcp", socket.gethostname())
+    confirm_url = f"{dashboard}/auth/login/device?{urllib.parse.urlencode({'code': code})}"
+    print(f"Confirm code {code} at:\n  {confirm_url}\n(it expires in {int(expires) // 60} minutes)",
+          file=sys.stderr)
+    if not args.no_browser:
+        webbrowser.open(confirm_url)
+    token = configure["session_token"](
+        login["poll_device_auth"](dashboard, code, time.monotonic() + expires, args.poll_interval))
+
+    for name in configure["SESSION_VARS"] + configure["SHARE_LINK_VARS"]:
+        values.pop(name, None)
+    values.update(PANGOLIN_SESSION_TOKEN=token, PANGOLIN_DASHBOARD_URL=dashboard)
+    envtool["encrypt"](scope, values)
+    print(f"Saved your Pangolin session in {scope}. Restart Claude Code or Codex (the Taiga MCP "
+          "server) to use it; REST scripts pick it up on their next run.")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("taiga-login: cancelled", file=sys.stderr)
+        sys.exit(1)
+    except (RuntimeError, OSError, ValueError, subprocess.CalledProcessError) as error:
+        print(f"taiga-login: {error}", file=sys.stderr)
+        sys.exit(1)
