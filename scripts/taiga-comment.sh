@@ -73,7 +73,7 @@ HTTP_CODE=$(python3 -c 'import json, os; print(json.dumps({"type": "normal", "us
 if [[ "$HTTP_CODE" -ne 200 ]]; then
     echo "Taiga auth failed: HTTP $HTTP_CODE" >&2
     [[ "$HTTP_CODE" -eq 401 && ! -s "$TMPDIR_SCRIPT/auth.json" ]] &&
-        echo "An empty 401 is Pangolin refusing the request; check the PANGOLIN_* settings or run pangolin-login" >&2
+        echo "An empty 401 is Pangolin refusing the request; check the PANGOLIN_* settings or run dv taiga-login" >&2
     exit 1
 fi
 # The bearer token reaches curl through a file descriptor, never argv.

@@ -85,7 +85,7 @@ an admin revokes it; then run `dv taiga-login` again. The token is never printed
 
 When it breaks:
 
-- `Pangolin session expired or has no access to this resource; run pangolin-login again`
+- `Pangolin session expired or has no access to this resource; sign in again with dv taiga-login (or pangolin-login)`
   (in the MCP server's log or from a REST script): run `dv taiga-login` again. If it fails again right after a fresh login, your Pangolin account cannot open
   Taiga; ask an admin.
 - `device code expired before it was confirmed`: run `dv taiga-login` again and confirm sooner.
@@ -128,7 +128,7 @@ printed on stdout.
 - Otherwise it runs pytaiga-mcp's own handshake (`python -m src.pangolin_cookies` in the
   `PYTAIGA_MCP_HOME` checkout), so it needs that checkout to be current.
 - The handshake runs on every call (about half a second); nothing is cached on disk.
-- `Pangolin session expired or has no access to this resource; run pangolin-login again`:
+- `Pangolin session expired or has no access to this resource; sign in again with dv taiga-login (or pangolin-login)`:
   run `dv taiga-login`. `PANGOLIN_ACCESS_TOKEN*` header credentials are refused (exit 2);
   store a session or Share Link instead.
 
